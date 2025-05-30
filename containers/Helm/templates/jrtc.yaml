@@ -159,6 +159,12 @@ spec:
             value: "/jrtc/out/lib/"
           - name: LD_LIBRARY_PATH
             value: "$LD_LIBRARY_PATH:/jrtc/out/lib/"
+        {{- if $.Values.jrtc_controller.log_analytics.enabled }}          
+          - name: LA_WORKSPACE_ID
+            value: {{ $.Values.jrtc_controller.log_analytics.workspace_id }}
+          - name: LA_PRIMARY_KEY
+            value: {{ $.Values.jrtc_controller.log_analytics.primary_key }}
+        {{- end }}
 
         resources:
           limits:
@@ -213,9 +219,9 @@ spec:
             value: "$LD_LIBRARY_PATH:/jrtc/out/lib/"
         {{- if $.Values.jrtc_controller.local_decoder.log_analytics.enabled }}          
           - name: LA_WORKSPACE_ID
-            value: {{ $.Values.jrtc_controller.local_decoder.log_analytics.workspace_id }}
+            value: {{ $.Values.jrtc_controller.log_analytics.workspace_id }}
           - name: LA_PRIMARY_KEY
-            value: {{ $.Values.jrtc_controller.local_decoder.log_analytics.primary_key }}
+            value: {{ $.Values.jrtc_controller.log_analytics.primary_key }}
         {{- end }}
 
         resources:

@@ -17,6 +17,10 @@ jbpf:
       port: 30450
 
   codelet_set:
+
+    - device: 1
+      config: ${JBPF_CODELETS}/ue_contexts/ue_contexts.yaml
+
     - device: 1
       config: ${JBPF_CODELETS}/mac/mac_stats.yaml 
 

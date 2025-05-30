@@ -77,7 +77,7 @@ uint64_t jbpf_main(void* state)
 
 
     // Increase loss count
-    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(out, stats, crc_hash, mac_ctx.ue_index, new_val);
+    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(out, stats, crc_hash, ctx->du_ue_index, new_val);
     //if (ind >= MAX_NUM_UE) return JBPF_CODELET_FAILURE;
     if (new_val) {
         out->stats[ind % MAX_NUM_UE].cons_min = UINT32_MAX;
@@ -93,14 +93,13 @@ uint64_t jbpf_main(void* state)
         out->stats[ind % MAX_NUM_UE].cnt_sinr = 0;
         out->stats[ind % MAX_NUM_UE].cnt_rsrp = 0;
     }
-    *not_empty_stats = 1;
 
 
     //////////////// Loss stats
 
     out->stats[ind % MAX_NUM_UE].cnt_tx++;
 
-    uint64_t key = ((uint64_t)mac_ctx.harq_id << 31) << 1 | (uint64_t)mac_ctx.ue_index;
+    uint64_t key = ((uint64_t)mac_ctx.harq_id << 31) << 1 | (uint64_t)ctx->du_ue_index;
     uint32_t *loss_cnt = (uint32_t *)JBPF_HASHMAP_LOOKUP_UPDATE_UINT32_ELEM(&cnt_loss, &key, 0);
 
     if (mac_ctx.tb_crc_success)
@@ -116,12 +115,11 @@ uint64_t jbpf_main(void* state)
         }
 #ifdef DEBUG_PRINT
         jbpf_printf_debug("Min/max: ue=%d min=%d max=%d\n",
-            mac_ctx.ue_index, 
+            ctx->du_ue_index, 
             out->stats[ind].cons_min, 
             out->stats[ind].cons_max);
 #endif
         *loss_cnt = 0;
-        *not_empty_stats = 1;
     } else {
         // Increase loss count
         (*loss_cnt)++;
@@ -135,7 +133,7 @@ uint64_t jbpf_main(void* state)
 
 
     // out->timestamp = jbpf_time_get_ns();
-    // out->ue_index = mac_ctx.ue_index;
+    // out->ue_index = ctx->du_ue_index;
     // out->harq_id = mac_ctx.harq_id;
     // out->tb_crc_success = mac_ctx.tb_crc_success;
 
@@ -152,7 +150,7 @@ uint64_t jbpf_main(void* state)
         out->stats[ind].cnt_sinr++;
 #ifdef DEBUG_PRINT
         jbpf_printf_debug("SINR: ue=%d SINR=%d sum_sinr=%d\n",
-            mac_ctx.ue_index, 
+            ctx->du_ue_index, 
             ul_sinr_dB,
             out->stats[ind].sum_sinr
         );
@@ -178,7 +176,7 @@ uint64_t jbpf_main(void* state)
         out->stats[ind].cnt_rsrp++;
 #ifdef DEBUG_PRINT
         jbpf_printf_debug("RSRP: ue=%d RSRP=%d sum_rsrp=%d\n",
-            mac_ctx.ue_index, 
+            ctx->du_ue_index, 
             ul_rsrp_dB,
             out->stats[ind].sum_rsrp
         );
@@ -190,6 +188,7 @@ uint64_t jbpf_main(void* state)
 #endif
     }
 
+    *not_empty_stats = 1;
 
     // if (mac_ctx.time_advance_offset.has_value()) {
     //     // Check phy_time_unit.to_seconds() to see how to convert to seconds

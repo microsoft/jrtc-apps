@@ -79,13 +79,17 @@ done
 echo "Extra values files: $EXTRA_VALUES_SUMMARY"
 
 
+
+echo "MJB LA_WORKSPACE_ID $LA_WORKSPACE_ID"
+
 # Set Log Analytics workspace parameters if required
 LA_OPTIONS=
 if [ ! -z "$LA_WORKSPACE_ID" ] && [ ! -z "$LA_PRIMARY_KEY" ]; then
     LA_OPTIONS="\
+    --set         jrtc_controller.log_analytics.enabled=true \
+    --set         jrtc_controller.log_analytics.workspace_id=$LA_WORKSPACE_ID \
+    --set         jrtc_controller.log_analytics.primary_key=$LA_PRIMARY_KEY"
     --set         jrtc_controller.local_decoder.log_analytics.enabled=true \
-    --set         jrtc_controller.local_decoder.log_analytics.workspace_id=$LA_WORKSPACE_ID \
-    --set         jrtc_controller.local_decoder.log_analytics.primary_key=$LA_PRIMARY_KEY"
     echo "Using Log Analytics workspace ID: $LA_WORKSPACE_ID"
 else
     echo "No Log Analytics workspace ID or API key provided. Skipping Log Analytics configuration."

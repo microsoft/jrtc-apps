@@ -5,6 +5,6 @@ syntax = "proto2";
 
 message rrc_ue_update_id {
     required uint64 timestamp = 1;
-    required uint32 ue_index = 2;
-    required uint32 timsi = 3;
+    required uint32 cucp_ue_index = 2;
+    required uint32 tmsi = 3;
 }

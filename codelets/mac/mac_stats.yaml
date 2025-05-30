@@ -47,8 +47,6 @@ codelet_descriptor:
           protobuf:
             package_path: ${JBPF_CODELETS}/mac/mac_sched_phr_stats.pb
             msg_name: phr_stats
-                        
-
     linked_maps:
       - map_name: stats_map_crc
         linked_codelet_name: mac_sched_crc_stats
@@ -79,3 +77,22 @@ codelet_descriptor:
       - map_name: phr_not_empty
         linked_codelet_name: mac_sched_phr_stats
         linked_map_name: phr_not_empty
+
+  - codelet_name: mac_sched_ue_deletion
+    codelet_path: ${JBPF_CODELETS}/mac/mac_sched_ue_deletion.o
+    hook_name: mac_sched_ue_deletion
+    priority: 1
+    linked_maps:
+      - map_name: stats_map_crc
+        linked_codelet_name: mac_sched_crc_stats
+        linked_map_name: stats_map_crc
+      - map_name: crc_hash
+        linked_codelet_name: mac_sched_crc_stats
+        linked_map_name: crc_hash
+
+      - map_name: stats_map_bsr
+        linked_codelet_name: mac_sched_bsr_stats
+        linked_map_name: stats_map_bsr
+      - map_name: bsr_hash
+        linked_codelet_name: mac_sched_bsr_stats
+        linked_map_name: bsr_hash

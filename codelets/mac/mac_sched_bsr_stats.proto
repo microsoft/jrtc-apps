@@ -5,7 +5,7 @@ syntax = "proto2";
 
 
 message t_bsr_stats {
-   required uint32 ue_index = 1;
+   required uint32 du_ue_index = 1;
    required uint32 cnt = 2;
 }
 

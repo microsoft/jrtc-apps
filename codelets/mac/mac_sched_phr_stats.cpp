@@ -65,10 +65,10 @@ uint64_t jbpf_main(void* state)
 
 
     out->timestamp = jbpf_time_get_ns();
-    //out->ue_index = mac_ctx.ue_index;
+    //out->ue_index = ctx->du_ue_index;
     //out->rnti = (uint32_t) mac_ctx.rnti;
 
-    *not_empty_stats = 1;
+
 
     // NOTE: here I cannot use this call:
     // struct srsran::cell_ph_report rep = static_cast<srsran::cell_ph_report>(mac_ctx.phr.get_se_phr());
@@ -78,8 +78,8 @@ uint64_t jbpf_main(void* state)
     for (int i=0; i<srsran::MAX_NOF_DU_CELLS; i++) {
         if (i < ph_reports.size()) {
             int new_val = 0;
-            //uint64_t key = ((uint64_t)ph_reports[i].serv_cell_id << 31) << 1 | (uint64_t)mac_ctx.ue_index;
-            uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, phr_hash, ph_reports[i].serv_cell_id, mac_ctx.ue_index, new_val);
+            //uint64_t key = ((uint64_t)ph_reports[i].serv_cell_id << 31) << 1 | (uint64_t)ctx->du_ue_index;
+            uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, phr_hash, ph_reports[i].serv_cell_id, ctx->du_ue_index, new_val);
             if (new_val) {
                 out->stats[ind % MAX_NUM_UE_CELL].ph_min = UINT32_MAX;
                 out->stats[ind % MAX_NUM_UE_CELL].ph_max = 0;
@@ -91,6 +91,7 @@ uint64_t jbpf_main(void* state)
             }
             if (out->stats[ind % MAX_NUM_UE_CELL].ph_max < ph_reports[i].ph.stop()) {
                 out->stats[ind % MAX_NUM_UE_CELL].ph_max = ph_reports[i].ph.stop();
+                
             }
             // out->ph_reports[i].ph_min = ph_reports[i].ph.start();
             // out->ph_reports[i].ph_max = ph_reports[i].ph.stop();
@@ -104,6 +105,7 @@ uint64_t jbpf_main(void* state)
                 // out->ph_reports[i].p_cmax_min = ph_reports[i].p_cmax.value().start();
                 // out->ph_reports[i].p_cmax_max = ph_reports[i].p_cmax.value().stop();
             }
+            *not_empty_stats = 1;
         } else {
             break;
         }

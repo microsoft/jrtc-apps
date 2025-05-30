@@ -5,6 +5,7 @@
 
 #include "jbpf_srsran_contexts.h"
 
+#include "pdcp_helpers.h"
 #include "pdcp_dl_pkts.h"
 #include "pdcp_dl_north_stats.pb.h"
 
@@ -36,10 +37,10 @@ DEFINE_PROTOHASH_64(dl_north_hash, MAX_NUM_UE_RB);
 
 
 #ifdef PDCP_REPORT_DL_DELAY_QUEUE
-struct jbpf_load_map_def SEC("maps") sdu_arrivals = {
+struct jbpf_load_map_def SEC("maps") sdu_events = {
     .type = JBPF_MAP_TYPE_ARRAY,
     .key_size = sizeof(int),
-    .value_size = sizeof(t_sdu_arrivals),
+    .value_size = sizeof(t_sdu_events),
     .max_entries = 1,
 };
 
@@ -72,8 +73,8 @@ uint64_t jbpf_main(void* state)
     }
     
 #ifdef PDCP_REPORT_DL_DELAY_QUEUE
-    t_sdu_arrivals *arrivals = (t_sdu_arrivals *)jbpf_map_lookup_elem(&sdu_arrivals, &zero_index);
-    if (!arrivals)
+    t_sdu_events *events = (t_sdu_events *)jbpf_map_lookup_elem(&sdu_events, &zero_index);
+    if (!events)
         return JBPF_CODELET_FAILURE;
 
     t_sdu_queues *queues = (t_sdu_queues *)jbpf_map_lookup_elem(&sdu_queues, &zero_index);
@@ -93,7 +94,7 @@ uint64_t jbpf_main(void* state)
 
 
     // out->timestamp = jbpf_time_get_ns();
-    // out->ue_index = pdcp_ctx.ue_index;
+    // out->cu_ue_index = pdcp_ctx.cu_ue_index;
     // out->is_srb = pdcp_ctx.is_srb;
     // out->rb_id = pdcp_ctx.rb_id;
     // out->rlc_mode = pdcp_ctx.rlc_mode;
@@ -101,90 +102,92 @@ uint64_t jbpf_main(void* state)
     // out->count = ctx->srs_meta_data1 & 0xFFFFFFFF;
 
 
+    // create explicit rbid
+    int rb_id = RBID_2_EXPLICIT(pdcp_ctx.is_srb, pdcp_ctx.rb_id);
+
     // Store SDU arrival time so we can calculate delay and queue size at the PDCP level
     uint32_t sdu_length = (uint32_t) (ctx->srs_meta_data1 >> 32);
     uint32_t count = (uint32_t) (ctx->srs_meta_data1 & 0xFFFFFFFF);
+    uint32_t window_size = (uint32_t) (ctx->srs_meta_data2 & 0xFFFFFFFF);
 
 #ifdef DEBUG_PRINT
-    // jbpf_printf_debug("PDCP DL NEW SDU: ue_index=%d, sdu_length=%d, count=%d\n", 
-    //     pdcp_ctx.ue_index, sdu_length, count);
-    jbpf_printf_debug("PDCP DL NEW SDU: ue_index=%d, rb_id=%d, count=%d\n", 
-        pdcp_ctx.ue_index, pdcp_ctx.rb_id, count);
+    // jbpf_printf_debug("PDCP DL NEW SDU: cu_ue_index=%d, sdu_length=%d, count=%d\n", 
+    //     pdcp_ctx.cu_ue_index, sdu_length, count);
+    jbpf_printf_debug("PDCP DL NEW SDU: cu_ue_index=%d, rb_id=%d, count=%d\n", 
+        pdcp_ctx.cu_ue_index, rb_id, count);
 #endif
 
     int new_val = 0;
 
 
-    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, dl_north_hash, pdcp_ctx.ue_index, pdcp_ctx.rb_id, new_val);
+    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, dl_north_hash, pdcp_ctx.cu_ue_index, rb_id, new_val);
     if (new_val) {
-        out->stats[ind % MAX_NUM_UE_RB].total_sdu_B = 0;
-        out->stats[ind % MAX_NUM_UE_RB].sdu_count = 0;
-        out->stats[ind % MAX_NUM_UE_RB].min_sdu_B = UINT32_MAX;
-        out->stats[ind % MAX_NUM_UE_RB].max_sdu_B = 0;
+        out->stats[ind % MAX_NUM_UE_RB].cu_ue_index = pdcp_ctx.cu_ue_index;
+        out->stats[ind % MAX_NUM_UE_RB].is_srb = pdcp_ctx.is_srb;
+        out->stats[ind % MAX_NUM_UE_RB].rb_id = pdcp_ctx.rb_id;
+
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.count = 0;
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.total = 0;
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.min = UINT32_MAX;
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.max = 0;
     }
 
     *not_empty_stats = 1;
 
-    out->stats[ind % MAX_NUM_UE_RB].sdu_count++; 
-
-    out->stats[ind % MAX_NUM_UE_RB].total_sdu_B += sdu_length;
-    if (out->stats[ind % MAX_NUM_UE_RB].min_sdu_B > sdu_length) {
-        out->stats[ind % MAX_NUM_UE_RB].min_sdu_B = sdu_length;
+    out->stats[ind % MAX_NUM_UE_RB].window.count++;
+    out->stats[ind % MAX_NUM_UE_RB].window.total += window_size;
+    if (out->stats[ind % MAX_NUM_UE_RB].window.min > window_size) {
+        out->stats[ind % MAX_NUM_UE_RB].window.min = window_size;
     }
-    if (out->stats[ind % MAX_NUM_UE_RB].max_sdu_B < sdu_length) {
-        out->stats[ind % MAX_NUM_UE_RB].max_sdu_B = sdu_length;
+    if (out->stats[ind % MAX_NUM_UE_RB].window.max < window_size) {
+        out->stats[ind % MAX_NUM_UE_RB].window.max = window_size;
     }
 
-    
+    out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.count++; 
+    out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.total += sdu_length;
+    if (out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.min > sdu_length) {
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.min = sdu_length;
+    }
+    if (out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.max < sdu_length) {
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.max = sdu_length;
+    }
+
 // Still not fully debugged so allowing to be disabled
 #ifdef PDCP_REPORT_DL_DELAY_QUEUE
 
-    // NOTE: There are two potential issues here:
-    // - We don't empty the hash once a packet is served. 
-    //   We relay on it being cleared once a sec, when reported.
-    //   This means that we can have a hash overflow and miss some packets
-    // - To prevent overflow, the hash size may have to be large
-    //   This can cause large overhead at JBPF codelet level, affecting RAN
-    //   We haven't measured this yet.  
-
     uint64_t now_ns = jbpf_time_get_ns();
     uint32_t key1 = 
-        ((uint64_t)(pdcp_ctx.rb_id & 0xFFFF) << 15) << 1 | 
-        ((uint64_t)(pdcp_ctx.ue_index & 0xFFFF));
-    ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(arrivals, map, delay_hash, key1, count, new_val);
-    if (new_val) {
-        // It should always be a new value, but maybe the hash is full, then ignore
-        arrivals->map[ind % MAX_SDU_IN_FLIGHT].arrival_ns = now_ns;
-        arrivals->map[ind % MAX_SDU_IN_FLIGHT].sdu_length = sdu_length;
-    }
+        ((uint64_t)(rb_id & 0xFFFF) << 15) << 1 | 
+        ((uint64_t)(pdcp_ctx.cu_ue_index & 0xFFFF));
+    ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(events, map, delay_hash, key1, count, new_val);
+
+    // in normal behavior, we should not have a new value, since the element would be cleated by deliv/discard handlers.
+    // however in cases where a ue gets deleted and another one gets created the same cu_ue_index,
+    // we will find an old element.
+    // therefore reset the values irrespective of new_val
+    
+    events->map[ind % MAX_SDU_IN_FLIGHT].sdu_arrival_ns = now_ns;
+    events->map[ind % MAX_SDU_IN_FLIGHT].pdcpTx_ns = 0;
+    events->map[ind % MAX_SDU_IN_FLIGHT].rlcTxStarted_ns = 0;
+    events->map[ind % MAX_SDU_IN_FLIGHT].rlcDelivered_ns = 0;
+    events->map[ind % MAX_SDU_IN_FLIGHT].sdu_length = sdu_length;
+
 #ifdef DEBUG_PRINT
-    jbpf_printf_debug("   NEW DELAY: ue_index=%d, arrival_ns=%ld, sdu_length=%d\n", 
-        pdcp_ctx.ue_index, arrivals->map[ind % MAX_SDU_IN_FLIGHT].arrival_ns, sdu_length);
+    jbpf_printf_debug("   NEW DELAY: cu_ue_index=%d, arrival_ns=%ld, sdu_length=%d\n", 
+        pdcp_ctx.cu_ue_index, events->map[ind % MAX_SDU_IN_FLIGHT].sdu_arrival_ns, sdu_length);
 #endif
 
-    ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(queues, map, queue_hash, pdcp_ctx.ue_index, pdcp_ctx.rb_id, new_val);
+    ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(queues, map, queue_hash, pdcp_ctx.cu_ue_index, rb_id, new_val);
+
     if (new_val) {
         queues->map[ind % MAX_SDU_QUEUES].pkts = 0;
         queues->map[ind % MAX_SDU_QUEUES].bytes = 0;
     }
-
-    // TBD: We don't check whether the actual UE changes. 
-    // If a UE detaches and another one gets the same ue_index, 
-    // we will incorrectly add the stale queue count to the new index. 
-    // We need to flush the stats somehow when a new UE is detected.
-    // We should do it at the PDCP layer ideally.
-    // We should perhaps use pdcp_dl_reestablish hook, or add another hook.     
-    if (now_ns - queues->map[ind % MAX_SDU_QUEUES].last_update_ns > FIVE_SECOND_NS) {
-        queues->map[ind % MAX_SDU_QUEUES].pkts = 0;
-        queues->map[ind % MAX_SDU_QUEUES].bytes = 0;
-    }
-
     queues->map[ind % MAX_SDU_QUEUES].pkts ++;
     queues->map[ind % MAX_SDU_QUEUES].bytes += sdu_length;
-    queues->map[ind % MAX_SDU_QUEUES].last_update_ns = now_ns;
 #ifdef DEBUG_PRINT
-    jbpf_printf_debug("   NEW QUEUE: ue_index=%d, pkts=%ld, bytes=%d\n", 
-        pdcp_ctx.ue_index,
+    jbpf_printf_debug("   NEW QUEUE: cu_ue_index=%d, pkts=%ld, bytes=%d\n", 
+        pdcp_ctx.cu_ue_index,
         queues->map[ind % MAX_SDU_QUEUES].pkts,
         queues->map[ind % MAX_SDU_QUEUES].bytes);
 #endif

@@ -47,8 +47,8 @@ uint64_t jbpf_main(void* state)
         return JBPF_CODELET_FAILURE;
 
     out->timestamp = jbpf_time_get_ns();
-    out->ue_index = rrc_ctx.ue_index;
-    out->old_ue_index = ctx->srs_meta_data1;
+    out->cucp_ue_index = rrc_ctx.cu_cp_ue_index;
+    out->old_cucp_ue_index = ctx->srs_meta_data1;
     out->c_rnti = ctx->srs_meta_data2 >> 48;
     out->pci = (ctx->srs_meta_data2 >> 32) & 0xFFFF;
     out->tac = ctx->srs_meta_data2 & 0xFFFFFFFF;

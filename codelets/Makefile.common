@@ -69,7 +69,7 @@ $(PROTO_AND_SCHEMA):
 	rm -f $(CURDIR)/*_serializer.c $(CURDIR)/*.pb.c; \
 	if [ "$(USE_JRTC)" = "1" ]; then \
 		tmpfile=$$(mktemp); \
-		rm $(call proto_file, $@).py; \
+		rm -f $(call proto_file, $@).py; \
 		ctypesgen $(call proto_file, $@).pb.h -I${NANO_PB} -o $(call proto_file, $@).py >$$tmpfile 2>&1 || { \
 			cat $$tmpfile; \
 			rm -f $$tmpfile; \

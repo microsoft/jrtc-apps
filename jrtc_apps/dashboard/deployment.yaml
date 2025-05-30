@@ -16,6 +16,11 @@ app:
     type: python
     port: 30500
     modules:
+      - ${JRTC_APPS}/libs/logger.py
+      - ${JRTC_APPS}/libs/la_logger.py
+      - ${JRTC_APPS}/libs/ue_contexts_map.py
+      - ${JBPF_CODELETS}/ue_contexts/ue_contexts.py
+      
       - ${JBPF_CODELETS}/mac/mac_sched_bsr_stats.py
       - ${JBPF_CODELETS}/mac/mac_sched_crc_stats.py
       - ${JBPF_CODELETS}/mac/mac_sched_phr_stats.py
@@ -46,6 +51,10 @@ jbpf:
       port: 30450
 
   codelet_set:
+
+    - device: 1
+      config: ${JBPF_CODELETS}/ue_contexts/ue_contexts.yaml
+
     - device: 1
       config: ${JBPF_CODELETS}/mac/mac_stats.yaml 
 

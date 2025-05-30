@@ -5,6 +5,7 @@
 
 #include "jbpf_srsran_contexts.h"
 
+#include "pdcp_helpers.h"
 #include "pdcp_ul_stats.pb.h"
 
 #include "../utils/misc_utils.h"
@@ -60,53 +61,70 @@ uint64_t jbpf_main(void* state)
         return JBPF_CODELET_FAILURE;
 
     // out->timestamp = jbpf_time_get_ns();
-    // out->ue_index = pdcp_ctx.ue_index;
+    // out->cu_ue_index = pdcp_ctx.cu_ue_index;
     // out->is_srb = pdcp_ctx.is_srb;
     // out->rb_id = pdcp_ctx.rb_id;
     // out->rlc_mode = pdcp_ctx.rlc_mode;
     // out->sdu_length = ctx->srs_meta_data1 >> 32;
     // out->window_size = ctx->srs_meta_data1 & 0xFFFFFFFF;
 
-
-#ifdef DEBUG_PRINT
-    jbpf_printf_debug("PDCP UL SDU: ue_index=%d, rb_id=%d, sdu_length=%d\n", 
-        pdcp_ctx.ue_index, pdcp_ctx.rb_id, ctx->srs_meta_data1 >> 32);
-#endif
-
-    int new_val = 0;
-
-    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, ul_hash, pdcp_ctx.ue_index, pdcp_ctx.rb_id, new_val);
-    if (new_val) {
-        out->stats[ind % MAX_NUM_UE_RB].total_sdu_B = 0;
-        out->stats[ind % MAX_NUM_UE_RB].sdu_count = 0;
-        out->stats[ind % MAX_NUM_UE_RB].min_sdu_B = UINT32_MAX;
-        out->stats[ind % MAX_NUM_UE_RB].max_sdu_B = 0;
-        out->stats[ind % MAX_NUM_UE_RB].total_win = 0;
-        out->stats[ind % MAX_NUM_UE_RB].min_win = UINT32_MAX;
-        out->stats[ind % MAX_NUM_UE_RB].max_win = 0;
-    }
+    // create explicit rbid
+    int rb_id = RBID_2_EXPLICIT(pdcp_ctx.is_srb, pdcp_ctx.rb_id);
 
     uint32_t sdu_length = (uint32_t )(ctx->srs_meta_data1 >> 32);
     uint32_t window_size = (uint32_t) (ctx->srs_meta_data1 & 0xFFFFFFFF);
 
-    out->stats[ind % MAX_NUM_UE_RB].sdu_count++; 
+#ifdef DEBUG_PRINT
+    jbpf_printf_debug("PDCP UL SDU: cu_ue_index=%d, rb_id=%d, sdu_length=%d\n", 
+        pdcp_ctx.cu_ue_index, rb_id, sdu_length);
+#endif
 
-    out->stats[ind % MAX_NUM_UE_RB].total_sdu_B += sdu_length;
-    if (out->stats[ind % MAX_NUM_UE_RB].min_sdu_B > sdu_length) {
-        out->stats[ind % MAX_NUM_UE_RB].min_sdu_B = sdu_length;
-    }
-    if (out->stats[ind % MAX_NUM_UE_RB].max_sdu_B < sdu_length) {
-        out->stats[ind % MAX_NUM_UE_RB].max_sdu_B = sdu_length;
+    int new_val = 0;
+
+    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, ul_hash, pdcp_ctx.cu_ue_index, rb_id, new_val);
+    if (new_val) {
+        out->stats[ind % MAX_NUM_UE_RB].cu_ue_index = pdcp_ctx.cu_ue_index;
+        out->stats[ind % MAX_NUM_UE_RB].is_srb = pdcp_ctx.is_srb;
+        out->stats[ind % MAX_NUM_UE_RB].rb_id = pdcp_ctx.rb_id;
+
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.count = 0;
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.total = 0;
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.min = UINT32_MAX;
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.max = 0;
+
+        out->stats[ind % MAX_NUM_UE_RB].window.count = 0;
+        out->stats[ind % MAX_NUM_UE_RB].window.total = 0;
+        out->stats[ind % MAX_NUM_UE_RB].window.min = UINT32_MAX;
+        out->stats[ind % MAX_NUM_UE_RB].window.max = 0;
     }
 
-    out->stats[ind % MAX_NUM_UE_RB].total_win += window_size;
-    if (out->stats[ind % MAX_NUM_UE_RB].min_win > window_size) {
-        out->stats[ind % MAX_NUM_UE_RB].min_win = window_size;
+    out->stats[ind % MAX_NUM_UE_RB].window.count++;
+    out->stats[ind % MAX_NUM_UE_RB].window.total += window_size;
+    if (out->stats[ind % MAX_NUM_UE_RB].window.min > window_size) {
+        out->stats[ind % MAX_NUM_UE_RB].window.min = window_size;
     }
-    if (out->stats[ind % MAX_NUM_UE_RB].max_win < window_size) {
-        out->stats[ind % MAX_NUM_UE_RB].max_win = window_size;
+    if (out->stats[ind % MAX_NUM_UE_RB].window.max < window_size) {
+        out->stats[ind % MAX_NUM_UE_RB].window.max = window_size;
     }
-    
+
+    out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.count++;
+    out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.total += window_size;
+    if (out->stats[ind % MAX_NUM_UE_RB].window.min > window_size) {
+        out->stats[ind % MAX_NUM_UE_RB].window.min = window_size;
+    }
+    if (out->stats[ind % MAX_NUM_UE_RB].window.max < window_size) {
+        out->stats[ind % MAX_NUM_UE_RB].window.max = window_size;
+    }
+
+    out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.count++; 
+    out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.total += sdu_length;
+    if (out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.min > sdu_length) {
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.min = sdu_length;
+    }
+    if (out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.max < sdu_length) {
+        out->stats[ind % MAX_NUM_UE_RB].sdu_bytes.max = sdu_length;
+    }
+
     *not_empty_stats = 1;
 
 

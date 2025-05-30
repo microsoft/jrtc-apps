@@ -5,5 +5,5 @@ syntax = "proto2";
 
 message rrc_ue_remove {
     required uint64 timestamp = 1;
-    required uint32 ue_index = 2;
+    required uint32 cucp_ue_index = 2;
 }

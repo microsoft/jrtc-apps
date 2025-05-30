@@ -28,12 +28,6 @@
 
 jbpf_ringbuf_map(output_map_dl_north, dl_north_stats, 1000);
 
-struct jbpf_load_map_def SEC("maps") last_time_dl_north = {
-    .type = JBPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(int),
-    .value_size = sizeof(uint64_t),
-    .max_entries = 1,
-};
 
 // We store stats in this (single entry) map across runs
 struct jbpf_load_map_def SEC("maps") stats_map_dl_north = {
@@ -56,13 +50,6 @@ struct jbpf_load_map_def SEC("maps") dl_north_not_empty = {
 //// DL SOUTH
 
 jbpf_ringbuf_map(output_map_dl_south, dl_south_stats, 1000);
-
-struct jbpf_load_map_def SEC("maps") last_time_dl_south = {
-    .type = JBPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(int),
-    .value_size = sizeof(uint64_t),
-    .max_entries = 1,
-};
 
 // We store stats in this (single entry) map across runs
 struct jbpf_load_map_def SEC("maps") stats_map_dl_south = {
@@ -87,13 +74,6 @@ struct jbpf_load_map_def SEC("maps") dl_south_not_empty = {
 //// UL
 
 jbpf_ringbuf_map(output_map_ul, ul_stats, 1000);
-
-struct jbpf_load_map_def SEC("maps") last_time_ul = {
-    .type = JBPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(int),
-    .value_size = sizeof(uint64_t),
-    .max_entries = 1,
-};
 
 // We store stats in this (single entry) map across runs
 struct jbpf_load_map_def SEC("maps") stats_map_ul = {
@@ -146,12 +126,7 @@ uint64_t jbpf_main(void *state)
         return JBPF_CODELET_FAILURE;
     dl_north_stats *out_dl_north = (dl_north_stats *)c;
 
-    uint64_t *last_timestamp_dl_north = (uint64_t*)jbpf_map_lookup_elem(&last_time_dl_north, &zero_index);
-    if (!last_timestamp_dl_north)
-        return JBPF_CODELET_FAILURE;
-
-        
-    if (*not_empty_dl_north_stats && *last_timestamp_dl_north < timestamp32)
+    if (*not_empty_dl_north_stats)
     {
         out_dl_north->timestamp = timestamp;
 
@@ -171,7 +146,6 @@ uint64_t jbpf_main(void *state)
         jbpf_map_clear(&stats_map_dl_north);
 
         *not_empty_dl_north_stats = 0;
-        *last_timestamp_dl_north = timestamp32;
 
         if (ret < 0) {
             return JBPF_CODELET_FAILURE;
@@ -194,12 +168,8 @@ uint64_t jbpf_main(void *state)
         return JBPF_CODELET_FAILURE;
     dl_south_stats *out_dl_south = (dl_south_stats *)c;
 
-    uint64_t *last_timestamp_dl_south = (uint64_t*)jbpf_map_lookup_elem(&last_time_dl_south, &zero_index);
-    if (!last_timestamp_dl_south)
-        return JBPF_CODELET_FAILURE;
-
         
-    if (*not_empty_dl_south_stats && *last_timestamp_dl_south < timestamp32)
+    if (*not_empty_dl_south_stats)
     {
         out_dl_south->timestamp = timestamp;
         int ret = 0;
@@ -219,7 +189,6 @@ uint64_t jbpf_main(void *state)
         jbpf_map_clear(&stats_map_dl_south);
 
         *not_empty_dl_south_stats = 0;
-        *last_timestamp_dl_south = timestamp32;
 
         if (ret < 0) {
             return JBPF_CODELET_FAILURE;
@@ -242,12 +211,7 @@ uint64_t jbpf_main(void *state)
     if (!out_ul)
         return JBPF_CODELET_FAILURE;
 
-    uint64_t *last_timestamp_ul = (uint64_t*)jbpf_map_lookup_elem(&last_time_ul, &zero_index);
-    if (!last_timestamp_ul)
-        return JBPF_CODELET_FAILURE;
-    
-
-    if (*not_empty_ul_stats && *last_timestamp_ul < timestamp32)
+    if (*not_empty_ul_stats)
     {
         out_ul->timestamp = timestamp;
 
@@ -267,7 +231,6 @@ uint64_t jbpf_main(void *state)
         jbpf_map_clear(&stats_map_ul);
 
         *not_empty_ul_stats = 0;
-        *last_timestamp_ul = timestamp32;
 
         if (ret < 0) {
             return JBPF_CODELET_FAILURE;

@@ -13,9 +13,9 @@
 // also comment out various linked maps 
 // because they will be optimized out by the compiler
 // # linked_maps:
-// #   - map_name: sdu_arrivals
+// #   - map_name: sdu_events
 // #     linked_codelet_name: pdcp_dl_new_sdu
-// #     linked_map_name: sdu_arrivals
+// #     linked_map_name: sdu_events
 // #   - map_name: sdu_queues
 // #     linked_codelet_name: pdcp_dl_new_sdu
 // #     linked_map_name: sdu_queues
@@ -31,12 +31,12 @@
 // #   hook_name: e1_cuup_bearer_context_setup
 // #   priority: 1
 // #   linked_maps:
-// #     - map_name: last_acked_map
+// #     - map_name: last_notif_acked_map
 // #       linked_codelet_name: pdcp_dl_delivery
-// #       linked_map_name: last_acked_map
-// #     - map_name: last_acked_hash
+// #       linked_map_name: last_notif_acked_map
+// #     - map_name: last_notif_acked_hash
 // #       linked_codelet_name: pdcp_dl_delivery
-// #       linked_map_name: last_acked_hash
+// #       linked_map_name: last_notif_acked_hash
 
 
 
@@ -47,25 +47,22 @@
 #define FIVE_SECOND_NS (5000000000)
 
 typedef struct {
-    uint16_t ue_index;
-    uint16_t rb_id;
-    uint32_t count;
-    uint64_t arrival_ns;
+    uint64_t sdu_arrival_ns;
+    uint64_t pdcpTx_ns;
+    uint64_t rlcTxStarted_ns;
+    uint64_t rlcDelivered_ns;
     uint32_t sdu_length;
-} t_arrival;
+} t_sdu_evs;
 
 typedef struct {
-    t_arrival map[MAX_SDU_IN_FLIGHT];
+    t_sdu_evs map[MAX_SDU_IN_FLIGHT];
     uint32_t map_count;
-} t_sdu_arrivals;
+} t_sdu_events;
 
 
 typedef struct {
-    uint16_t ue_index;
-    uint16_t rb_id;
     uint32_t pkts;
     uint32_t bytes;
-    uint64_t last_update_ns;
 } t_queue;
 
 

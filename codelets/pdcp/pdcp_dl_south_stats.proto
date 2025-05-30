@@ -3,30 +3,52 @@
 
 syntax = "proto2";
 
+message t_dls_stats_item {
+   required uint32 count = 1;
+   required uint32 total = 2;
+   required uint32 min = 3;
+   required uint32 max = 4;
+}
 
-message t_dlu_stats {
-   required uint32 ue_index = 1;
-   required uint32 rb_id = 2;
-   required uint32 sdu_count = 4;
-   required uint32 total_win = 7;
-   required uint32 min_win = 8;
-   required uint32 max_win = 9;
-   required uint32 total_delay = 10;
-   required uint32 min_delay = 11;
-   required uint32 max_delay = 12;
-   required uint32 delay_count = 13;
-   required uint32 total_queue_B = 14;
-   required uint32 min_queue_B = 15;
-   required uint32 max_queue_B = 16;
-   required uint32 total_queue_pkt = 17;
-   required uint32 min_queue_pkt = 18;
-   required uint32 max_queue_pkt = 19;
-   required uint32 queue_count = 20;
+message t_dls_traffic_stats_item {
+   required uint32 count = 1;
+   required uint32 total = 2;
+}
+
+message t_dls_stats {
+   required uint32 cu_ue_index = 1;
+   required uint32 is_srb = 2;
+   required uint32 rb_id = 3;
+   required t_dls_stats_item window = 4;
+
+   // delays
+   // pdcp_tx_delay = pdcp_dl_new_sdu ... pdcp_dl_tx_data_pdu
+   // rlc_tx_delay = pdcp_dl_tx_data_pdu ... pdcp_dl_handle_tx_notification
+   // rlc_deliv_delay = hook_pdcp_dl_handle_tx_notification  ... pdcp_dl_handle_delivery_notification
+   // total_delay = pdcp_dl_new_sdu ... pdcp_dl_handle_delivery_notification
+   required t_dls_stats_item pdcp_tx_delay = 5;
+   required t_dls_stats_item rlc_tx_delay = 6;
+   required t_dls_stats_item rlc_deliv_delay = 7;
+   required t_dls_stats_item total_delay = 8;
+
+   // pdcp tx Q.  SDUs stay in the queue until there is delivery-notification", the sdu is discaded.
+   required t_dls_stats_item tx_queue_bytes = 9;   
+   required t_dls_stats_item tx_queue_pkt = 10;
+
+   // SDUs transmitted
+   required t_dls_traffic_stats_item sdu_tx_bytes = 11;
+
+   // SDUs retransmitted
+   required t_dls_traffic_stats_item sdu_retx_bytes = 12;
+
+   // SDUs discarded
+   required t_dls_traffic_stats_item sdu_discarded_bytes = 13;
+
 }
 
 message dl_south_stats {
    required uint64 timestamp = 1;
-   repeated t_dlu_stats stats = 2;
+   repeated t_dls_stats stats = 2;
 }
 
 

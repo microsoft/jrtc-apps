@@ -1,0 +1,123 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
+codeletset_id: ue_contexts
+
+codelet_descriptor:
+
+  - codelet_name: du_ue_ctx_creation
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/du_ue_ctx_creation.o
+    hook_name: du_ue_ctx_creation
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:du_ue_ctx_creation_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: du_ue_ctx_creation
+
+  - codelet_name: du_ue_ctx_update_crnti
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/du_ue_ctx_update_crnti.o
+    hook_name: du_ue_ctx_update_crnti
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:du_ue_ctx_update_crnti_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: du_ue_ctx_update_crnti
+
+  - codelet_name: du_ue_ctx_deletion
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/du_ue_ctx_deletion.o
+    hook_name: du_ue_ctx_deletion
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:du_ue_ctx_deletion_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: du_ue_ctx_deletion
+
+  - codelet_name: cucp_uemgr_ue_add
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/cucp_uemgr_ue_add.o
+    hook_name: cucp_uemgr_ue_add
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:cucp_ue_ctx_creation_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: cucp_ue_ctx_creation
+
+  - codelet_name: cucp_uemgr_ue_update
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/cucp_uemgr_ue_update.o
+    hook_name: cucp_uemgr_ue_update
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:cucp_ue_ctx_update_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: cucp_ue_ctx_update
+
+  - codelet_name: cucp_uemgr_ue_remove
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/cucp_uemgr_ue_remove.o
+    hook_name: cucp_uemgr_ue_remove
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:cucp_ue_ctx_deletion_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: cucp_ue_ctx_deletion
+
+  - codelet_name: e1_cucp_bearer_context_setup
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/e1_cucp_bearer_context_setup.o
+    hook_name: e1_cucp_bearer_context_setup
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:e1ap_cucp_bearer_ctx_setup_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: e1ap_cucp_bearer_ctx_setup
+
+  - codelet_name: e1_cuup_bearer_context_setup
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/e1_cuup_bearer_context_setup.o
+    hook_name: e1_cuup_bearer_context_setup
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:e1ap_cuup_bearer_ctx_setup_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: e1ap_cuup_bearer_ctx_setup
+
+  - codelet_name: e1_cuup_bearer_context_release
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/e1_cuup_bearer_context_release.o
+    hook_name: e1_cuup_bearer_context_release
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:e1ap_cuup_bearer_ctx_release_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: e1ap_cuup_bearer_ctx_release

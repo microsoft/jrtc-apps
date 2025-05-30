@@ -62,7 +62,7 @@ uint64_t jbpf_main(void* state)
 
     // out->timestamp = jbpf_time_get_ns();
     // out->cell_index = mac_ctx.cell_index;
-    // out->ue_index = mac_ctx.ue_index;
+    // out->ue_index = ctx->du_ue_index;
     // out->crnti = (uint32_t) mac_ctx.crnti;
     // out->type = (uint32_t) mac_ctx.type;
 
@@ -70,7 +70,7 @@ uint64_t jbpf_main(void* state)
     int new_val = 0;
 
     // Increase BSR count
-    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(out, stats, bsr_hash, mac_ctx.ue_index, new_val);
+    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(out, stats, bsr_hash, ctx->du_ue_index, new_val);
     if (new_val) {
         out->stats[ind % MAX_NUM_UE].cnt = 0;
     }

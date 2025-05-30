@@ -20,10 +20,10 @@ resources:
       hugepages1Gi: 4Gi
   jbpf_proxy:
     limits:
-      cpu: 100m
+      cpu: 500m
       memory: 500Mi
     requests:
-      cpu: 50m
+      cpu: 500m
       memory: 500Mi
   jrtc:
     limits:
@@ -152,14 +152,17 @@ jrtc_controller:
   apps_vol_mount: ""
   image: ghcr.io/microsoft/jrt-controller/jrt-controller-azurelinux:latest
   port: 30500
+  log_analytics:
+    enabled: false
+    workspace_id: "PUT_WORKSPACE_ID_HERE"
+    primary_key: "PUT_PRIMARY_KEY_HERE"
+
   # Start local decoder as a part of the jrtc controller pod for debugging
   local_decoder: 
     enabled: false
     port: 30501
     log_analytics:
       enabled: false
-      workspace_id: "PUT_WORKSPACE_ID_HERE"
-      primary_key: "PUT_PRIMARY_KEY_HERE"
 
 
 

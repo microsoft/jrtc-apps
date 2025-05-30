@@ -5,7 +5,7 @@ syntax = "proto2";
 
 message rrc_ue_add {
     required uint64 timestamp = 1;
-    required uint32 ue_index = 2;
+    required uint32 cucp_ue_index = 2;
     required uint32 c_rnti = 3;
     required uint32 pci = 4;
     required uint32 tac = 5;

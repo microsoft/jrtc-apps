@@ -4,7 +4,7 @@
 syntax = "proto2";
 
 message t_phr_stats {
-   required uint32 ue_index = 1;
+   required uint32 du_ue_index = 1;
    required uint32 serv_cell_id = 2;
    required uint32 ph_min = 3;
    required uint32 ph_max = 4;

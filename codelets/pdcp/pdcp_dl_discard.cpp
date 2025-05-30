@@ -37,14 +37,6 @@ struct jbpf_load_map_def SEC("maps") stats_map_dl_south = {
 DEFINE_PROTOHASH_64(dl_south_hash, MAX_NUM_UE_RB);
 
 
-struct jbpf_load_map_def SEC("maps") last_deliv_acked_map = {
-    .type = JBPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(int),
-    .value_size = sizeof(t_last_acked),
-    .max_entries = 1,
-};
-
-DEFINE_PROTOHASH_64(last_deliv_acked_hash, MAX_NUM_UE_RB);
 
 #ifdef PDCP_REPORT_DL_DELAY_QUEUE
 struct jbpf_load_map_def SEC("maps") sdu_events = {
@@ -90,11 +82,6 @@ uint64_t jbpf_main(void* state)
     if (!out)
         return JBPF_CODELET_FAILURE;
 
-    t_last_acked *last_deliv_acked = (t_last_acked*)jbpf_map_lookup_elem(&last_deliv_acked_map, &zero_index);
-    if (!last_deliv_acked) {
-        return JBPF_CODELET_FAILURE;
-    }
-
 #ifdef PDCP_REPORT_DL_DELAY_QUEUE
     t_sdu_events *events = (t_sdu_events *)jbpf_map_lookup_elem(&sdu_events, &zero_index);
     if (!events)
@@ -118,13 +105,11 @@ uint64_t jbpf_main(void* state)
     int rb_id = RBID_2_EXPLICIT(pdcp_ctx.is_srb, pdcp_ctx.rb_id);    
 
     uint32_t window_size = (uint32_t) (ctx->srs_meta_data1 & 0xFFFFFFFF);
-    uint32_t notif_count = (uint32_t) (ctx->srs_meta_data1 >> 32);
+    uint32_t count = (uint32_t) (ctx->srs_meta_data1 >> 32);
 
 #ifdef DEBUG_PRINT
-    // jbpf_printf_debug("PDCP DL DELIVER SDU: cu_ue_index=%d, window_size=%d, notif_count=%d\n", 
-    //     pdcp_ctx.cu_ue_index, window_size, notif_count);
-    jbpf_printf_debug("PDCP DL DELIVER SDU: cu_ue_index=%d, rb_id=%d, notif_count=%d\n", 
-        pdcp_ctx.cu_ue_index, rb_id, notif_count);
+    jbpf_printf_debug("PDCP DL DISCARD SDU: cu_ue_index=%d, rb_id=%d, count=%d\n", 
+        pdcp_ctx.cu_ue_index, rb_id, count);
 #endif
 
 
@@ -199,113 +184,52 @@ uint64_t jbpf_main(void* state)
         ((uint64_t)(rb_id & 0xFFFF) << 15) << 1 | 
         ((uint64_t)(pdcp_ctx.cu_ue_index & 0xFFFF));
 
-    // At the beginning, 0 is not acked so set to "-1".
-    uint32_t ack_ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(last_deliv_acked, ack, last_deliv_acked_hash, rb_id, pdcp_ctx.cu_ue_index, new_val);
-    if (new_val) {
-        last_deliv_acked->ack[ack_ind % MAX_NUM_UE_RB] = UINT32_MAX;
-    }
+    uint32_t sdu_length = 0;
 
-    uint32_t delta = notif_count - last_deliv_acked->ack[ack_ind % MAX_NUM_UE_RB];   // modulo arithmetic
+    // Just find the key, don't add it. It was added in dl_new_sdu.
+    // It should always be found, but maybe the hash has been cleaned, then ignore
+    uint64_t compound_key = ((uint64_t)count << 31) << 1 | (uint64_t)delay_key; 
+    uint32_t *pind = (uint32_t *)jbpf_map_lookup_elem(&delay_hash, &compound_key); 
+    if (pind) {
+        uint32_t aind = *pind;
 
-    if (delta > 500) {
+        // get sdu length
+        sdu_length = events->map[aind % MAX_SDU_IN_FLIGHT].sdu_length;
+        total_sdu_length += sdu_length;
+        total_sdu_cnt ++;
 
-        jbpf_printf_debug("PDCP DL DELIVER SDU: cu_ue_index=%d, rb_id=%d delta too big !!!  ", 
-            pdcp_ctx.cu_ue_index, rb_id);
-        jbpf_printf_debug("delta=%d notif_count=%d last_deliv_acked=%d \n", 
-            delta, notif_count, last_deliv_acked->ack[ack_ind % MAX_NUM_UE_RB]);        
-        return JBPF_CODELET_FAILURE;
-    }
-
-#ifdef DEBUG_PRINT
-    jbpf_printf_debug("    ACKING: notif_count=%d, last_deliv_acked=%d, delta=%d\n", 
-        notif_count, last_deliv_acked->ack[ack_ind % MAX_NUM_UE_RB], delta);
-#endif
-
-    for (uint32_t ncnt = 1; ncnt <= delta; ncnt++) {
-        uint32_t notif = last_deliv_acked->ack[ack_ind % MAX_NUM_UE_RB] + ncnt;         // wraps if necessary
-
-        // Just find the key, don't add it. It was added in dl_new_sdu.
-        // It should always be found, but maybe the hash has been cleaned, then ignore
-        uint64_t compound_key = ((uint64_t)notif << 31) << 1 | (uint64_t)delay_key; 
-        uint32_t *pind = (uint32_t *)jbpf_map_lookup_elem(&delay_hash, &compound_key); 
-        if (pind) {
-            uint32_t aind = *pind;
-
-            uint64_t now_ns = jbpf_time_get_ns();
-            events->map[aind % MAX_SDU_IN_FLIGHT].rlcDelivered_ns = now_ns;
-
-            // only calculate rlc_deliv_delay if we have a valid rlcTxStarted_ns
-            if ((events->map[aind % MAX_SDU_IN_FLIGHT].rlcTxStarted_ns > 0) &&
-                (events->map[aind % MAX_SDU_IN_FLIGHT].rlcDelivered_ns > events->map[aind % MAX_SDU_IN_FLIGHT].rlcTxStarted_ns)) {
-
-                uint64_t delay = events->map[aind % MAX_SDU_IN_FLIGHT].rlcDelivered_ns - events->map[aind % MAX_SDU_IN_FLIGHT].rlcTxStarted_ns;  
-                
-                out->stats[ind % MAX_NUM_UE_RB].rlc_deliv_delay.count++; 
-                out->stats[ind % MAX_NUM_UE_RB].rlc_deliv_delay.total += delay;
-                if (out->stats[ind % MAX_NUM_UE_RB].rlc_deliv_delay.min > delay) {
-                    out->stats[ind % MAX_NUM_UE_RB].rlc_deliv_delay.min = delay;
-                }
-                if (out->stats[ind % MAX_NUM_UE_RB].rlc_deliv_delay.max < delay) {
-                    out->stats[ind % MAX_NUM_UE_RB].rlc_deliv_delay.max = delay;
-                }
+        int res;
+        // Remove the SDU from the arrival map
+        // Repeat lookup in case of concurrent accesses
+        for (uint8_t i = 0; i < 3; i++) {
+            res = JBPF_PROTOHASH_REMOVE_ELEM_64(events, map, delay_hash, delay_key, count);
+            if (res == JBPF_MAP_SUCCESS) {
+                break;
             }
-
-            // only calculate total_delay if we have a valid sdu arrival time
-            if ((events->map[aind % MAX_SDU_IN_FLIGHT].sdu_arrival_ns > 0) &&
-                (events->map[aind % MAX_SDU_IN_FLIGHT].rlcDelivered_ns > events->map[aind % MAX_SDU_IN_FLIGHT].sdu_arrival_ns)) {
-
-                uint64_t delay = events->map[aind % MAX_SDU_IN_FLIGHT].rlcDelivered_ns - events->map[aind % MAX_SDU_IN_FLIGHT].rlcTxStarted_ns;  
-                
-                out->stats[ind % MAX_NUM_UE_RB].total_delay.count++; 
-                out->stats[ind % MAX_NUM_UE_RB].total_delay.total += delay;
-                if (out->stats[ind % MAX_NUM_UE_RB].total_delay.min > delay) {
-                    out->stats[ind % MAX_NUM_UE_RB].total_delay.min = delay;
-                }
-                if (out->stats[ind % MAX_NUM_UE_RB].total_delay.max < delay) {
-                    out->stats[ind % MAX_NUM_UE_RB].total_delay.max = delay;
-                }
-            }
-
-            // get sdu length
-            uint32_t sdu_length = events->map[aind % MAX_SDU_IN_FLIGHT].sdu_length;
-            total_sdu_length += sdu_length;
-            total_sdu_cnt ++;
-
-            int res;
-            // Remove the SDU from the arrival map
-            // Repeat lookup in case of concurrent accesses
-            for (uint8_t i = 0; i < 3; i++) {
-                res = JBPF_PROTOHASH_REMOVE_ELEM_64(events, map, delay_hash, delay_key, notif);
-                if (res == JBPF_MAP_SUCCESS) {
-                    break;
-                }
-            }
-            
-#ifdef DEBUG_PRINT
-            jbpf_printf_debug("    DELIVER DELAY: notif=%d, sdu_length=%d, delay=%d\n", 
-                notif, sdu_length, delay);
-#endif
+        }
         
-        } else {
-            // Just find the key, don't add it. 
-            // It should always be found, but maybe the hash has been cleaned, then ignore
 #ifdef DEBUG_PRINT
-            jbpf_printf_debug("PDCP DL DELIVER KEY NOT FOUND: notif=%d, notif_count=%d, last_deliv_acked=%d\n", 
-                notif, notif_count, last_deliv_acked->ack[ack_ind % MAX_NUM_UE_RB]);
+        jbpf_printf_debug("    DISCARD DELAY: count=%d, sdu_length=%d, delay=%d\n", 
+            count, sdu_length, delay);
 #endif
-        }    
-    }
+    
+    } else {
+        // Just find the key, don't add it. 
+        // It should always be found, but maybe the hash has been cleaned, then ignore
+//#ifdef DEBUG_PRINT
+        jbpf_printf_debug("PDCP DL DISCARD KEY NOT FOUND: count=%d \n", count);
+//#endif
+    }    
 
-    // Reset the notification count
-    last_deliv_acked->ack[ack_ind % MAX_NUM_UE_RB] = notif_count;
+    
 
 
     // Calculate queue size
 
     // Just find the key, don't add it. It was added in dl_new_sdu.
     // It should always be found, but maybe the hash has been cleaned, then ignore
-    uint64_t compound_key = ((uint64_t)rb_id << 31) << 1 | (uint64_t)pdcp_ctx.cu_ue_index; 
-    uint32_t *pind = (uint32_t *)jbpf_map_lookup_elem(&queue_hash, &compound_key); 
+    compound_key = ((uint64_t)rb_id << 31) << 1 | (uint64_t)pdcp_ctx.cu_ue_index; 
+    pind = (uint32_t *)jbpf_map_lookup_elem(&queue_hash, &compound_key); 
 
     if (pind) {
         uint32_t qind = *pind;
@@ -327,7 +251,7 @@ uint64_t jbpf_main(void* state)
         uint32_t bytes = queues->map[qind % MAX_SDU_QUEUES].bytes;
 
 #ifdef DEBUG_PRINT
-        jbpf_printf_debug("    DELIVER QUEUE: cu_ue_index=%d, pkts=%d, bytes=%d\n", 
+        jbpf_printf_debug("    DISCARD QUEUE: cu_ue_index=%d, pkts=%d, bytes=%d\n", 
             pdcp_ctx.cu_ue_index, pkts, bytes);
 #endif
 
@@ -348,6 +272,11 @@ uint64_t jbpf_main(void* state)
         if (out->stats[ind % MAX_NUM_UE_RB].tx_queue_bytes.max < bytes) {
             out->stats[ind % MAX_NUM_UE_RB].tx_queue_bytes.max = bytes;
         }
+
+        // update discard stats
+        out->stats[ind % MAX_NUM_UE_RB].sdu_discarded_bytes.count++; 
+        out->stats[ind % MAX_NUM_UE_RB].sdu_discarded_bytes.total += sdu_length;
+
     }
 #endif
     
