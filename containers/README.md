@@ -17,7 +17,7 @@ To build required images:
 ```sh
 ./init_submodules.sh
 cd containers/Docker
-sudo ./build.base.sh [-b <base-image-tag>]
+sudo ./build_base.sh [-b <base-image-tag>]
 sudo ./build_srs_jbpf.sh [-b <base-image-tag>] [-s <srs-image-tag>] [-c]   # Use -c for '--no-cache'
 sudo ./build_srs_jbpf_sdk.sh [-s <srs-image-tag>]
 ```
