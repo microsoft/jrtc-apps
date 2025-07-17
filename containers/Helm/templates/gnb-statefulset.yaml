@@ -48,6 +48,8 @@ spec:
         runAsUser: 0
         runAsGroup: 0
       serviceAccountName: srs-service-account
+      nodeSelector:
+        kubernetes.io/hostname: {{ $.Values.nodeSelector.hostname }}
       terminationGracePeriodSeconds: 0
       volumes:
       - name: dshm

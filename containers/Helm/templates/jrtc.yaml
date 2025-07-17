@@ -112,6 +112,8 @@ spec:
         runAsGroup: 0
       serviceAccountName: srs-service-account
       terminationGracePeriodSeconds: 0
+      nodeSelector:
+        kubernetes.io/hostname: {{ $.Values.nodeSelector.hostname }}
       volumes:
       - name: dshm
         hostPath:

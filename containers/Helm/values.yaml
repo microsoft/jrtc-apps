@@ -8,6 +8,9 @@ image:
   pullPolicy: Always
 
 
+nodeSelector:
+  hostname: k8s-worker6
+
 resources:
   gnb:
     limits:
