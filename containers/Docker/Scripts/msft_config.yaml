@@ -24,7 +24,8 @@ cu_cp:
               - sst: 1
                 sd: 164
   security:
-    nea_pref_list: nea2,nea1,nea3,nea0    # required for iPhone
+    nia_pref_list: nia2,nia1
+    nea_pref_list: nea2,nea1,nea3,nea0    # nea2 required for iPhone
   mobility:
     cells:
       - nr_cell_id: 0x66C000          # For the default gnb_id=411 (gnb_id_bit_length=22), NR cell IDs start with 0x66C000 and increment for each cell of the DU.
