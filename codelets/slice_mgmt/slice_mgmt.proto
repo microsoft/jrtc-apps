@@ -1,0 +1,42 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
+syntax = "proto2";
+
+message nssai_t {
+    required uint32 sst = 1;
+    required uint32 sd = 2;
+}
+
+message slice_t {
+    required uint32  pci = 1;
+    required uint32  plmn_id = 2;
+    required nssai_t nssai = 3;
+    required uint32  min_prb_policy_ratio = 4;  // Sets the minimum percentage of PRBs to be allocated to the slice. Supported [0 - 100].
+    required uint32  max_prb_policy_ratio = 5;  //Sets the minimum percentage of PRBs to be allocated to the slice. Supported [0 - 100].
+    required uint32  priority = 6;  // Sets the slice priority. Values: [0 - 254].
+}
+
+enum slice_mgmt_msg_type {
+    UNKNOWN = 0;
+    GET_SLICE_ALLOC  = 1;
+    SET_SLICE_ALLOC  = 2;
+}
+
+message slice_mgmt_set_req {
+    optional uint32 sfn = 1;
+    optional uint32 slot_index = 2;
+    repeated slice_t slice = 3;
+}
+
+message slice_mgmt_req {
+    required slice_mgmt_msg_type msg_type = 1;
+    optional slice_mgmt_set_req set_req = 2;   // Used if msg_type == GET_SLICE_ALLOC
+}
+
+message slice_mgmt_ind {
+    required uint64 timestamp = 1;
+    required uint32 sfn = 2;
+    required uint32 slot_index = 3;
+    repeated slice_t slice = 4;
+}
