@@ -65,59 +65,6 @@ cell_cfg:
     prach_frequency_start: 12
   pusch:
     mcs_table: qam256
-  slicing:                              # Optional TEXT. Configure network slicing options. This can only be set via the configuration file.
-
-    # Each slice has:
-        # min_prb_policy_ratio → guaranteed floor (it always gets at least that much if it has traffic).
-        # max_prb_policy_ratio → hard ceiling (it will never exceed that share).
-        # priority → relative importance between slices.
-
-    # When multiple slices want more than their guaranteed minimums:
-        # The scheduler looks at their priority values.
-        # Slices with higher priority get to “claim” additional PRBs before lower-priority slices.
-        # If two slices have the same priority, they share equally (round-robin / proportional allocation, depending on the implementation).
-
-        # Example - Suppose you have 100 PRBs available:
-
-        #     Slice A: min = 20%, max = 60%, priority = 10
-        #     Slice B: min = 20%, max = 80%, priority = 5
-
-        # If both slices are active and demand more than their minimum:
-        
-        # 1. Each gets their min first → A = 20 PRBs, B = 20 PRBs.
-        #     Remaining = 60 PRBs.
-
-        # 2. The remaining 60 PRBs are allocated weighted by priority.
-        #     Total weight = 10 + 5 = 15.
-        #     A’s share = (10/15) × 60 = 40.
-        #     B’s share = (5/15) × 60 = 20.
-
-        # 3. Apply the max limits:
-        #     A’s total = 20 + 40 = 60 (OK, matches its max).
-        #     B’s total = 20 + 20 = 40 (well below its max of 80).
-
-
-    -   # slice=internet                                  # Configure Slice 1
-      sst: 1                                  # Optional UINT (1). Sets the Slice Service Type. Supported: [0 - 255].
-      sd: 162                                   # Optional UINT (0). Sets the Service Differentiator. Supported: [0-16777215].
-      sched_cfg:                              # Scheduler configuration for the slice
-        min_prb_policy_ratio: 0                 # Optional UINT (0). Sets the minimum percentage of PRBs to be allocated to the slice. Supported [0 - 100].
-        max_prb_policy_ratio: 90               # Optional UINT (100). Sets the maximum percentage of PRBs to be allocated to the slice. Supported [1 - 100].
-        priority: 1
-    -  # slice=internet2                                         # Configure Slice 1
-      sst: 1                                  # Optional UINT (1). Sets the Slice Service Type. Supported: [0 - 255].
-      sd: 163                                   # Optional UINT (0). Sets the Service Differentiator. Supported: [0-16777215].
-      sched_cfg:                              # Scheduler configuration for the slice
-        min_prb_policy_ratio: 0                 # Optional UINT (0). Sets the minimum percentage of PRBs to be allocated to the slice. Supported [0 - 100].
-        max_prb_policy_ratio: 10               # Optional UINT (100). Sets the maximum percentage of PRBs to be allocated to the slice. Supported [1 - 100].
-        priority: 1
-    -  # slice=default                                     # Configure Slice 1
-      sst: 1                                  # Optional UINT (1). Sets the Slice Service Type. Supported: [0 - 255].
-      sd: 164                                   # Optional UINT (0). Sets the Service Differentiator. Supported: [0-16777215].
-      sched_cfg:                              # Scheduler configuration for the slice
-        min_prb_policy_ratio: 0                 # Optional UINT (0). Sets the minimum percentage of PRBs to be allocated to the slice. Supported [0 - 100].
-        max_prb_policy_ratio: 100               # Optional UINT (100). Sets the maximum percentage of PRBs to be allocated to the slice. Supported [1 - 100].
-        priority: 1
 
 cells:
   - pci: 1

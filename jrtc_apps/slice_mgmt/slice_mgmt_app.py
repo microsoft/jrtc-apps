@@ -236,7 +236,7 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                     )
                     data = data_ptr.contents
 
-                    state.logger.log_msg(True, False, "", f"SLICE_MGMT_IND_SIDX: timestamp  {data.timestamp} sfn {data.sfn} slot_index {data.slot_index}")
+                    state.logger.log_msg(True, False, "", f"SLICE_MGMT_IND_SIDX: timestamp  {data.timestamp} sfn {data.sfn} slot_index {data.slot_index} num custom slices {data.slice_count}")
                     slices = list(data.slice)
                     for i in range(data.slice_count):
                         state.logger.log_msg(True, False, "", f"  slice {i} : pci  {slices[i].pci} nssai {slices[i].nssai.sst}/{slices[i].nssai.sd} min {slices[i].min_prb_policy_ratio} max {slices[i].max_prb_policy_ratio} priority {slices[i].priority}")
