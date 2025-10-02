@@ -1,8 +1,10 @@
 #!/bin/bash
 
 BASE_IMAGE_TAG=latest
-IMAGE_TAG=srsran25.04-latest
 CACHE_FLAG=
+
+CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+source $(dirname $(dirname "$CURRENT_DIR"))/set_vars.sh
 
 Usage()
 {
@@ -21,7 +23,7 @@ while getopts "b:s:c" option; do
 		b) # Set image tag
 			BASE_IMAGE_TAG="$OPTARG";;
 		s) # Set image tag
-			IMAGE_TAG="$OPTARG";;
+			SRSRAN_IMAGE_TAG="$OPTARG";;
 		c) # Set image tag
 			CACHE_FLAG="--no-cache";;
 		\?) # Invalid option
@@ -32,10 +34,10 @@ while getopts "b:s:c" option; do
 done
 
 echo BASE_IMAGE_TAG $BASE_IMAGE_TAG
-echo IMAGE_TAG $IMAGE_TAG
+echo SRSRAN_IMAGE_TAG $SRSRAN_IMAGE_TAG
 
 docker build $CACHE_FLAG \
     --build-arg BASE_IMAGE_TAG=${BASE_IMAGE_TAG} \
-    -t ghcr.io/microsoft/jrtc-apps/srs-jbpf:${IMAGE_TAG} -f SRS-jbpf.Dockerfile .
+    -t ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRSRAN_IMAGE_TAG} -f SRS-jbpf.Dockerfile .
 
 exit 0
