@@ -16,8 +16,4 @@ la_bytes_per_batch = 1024 * 1024  # 1 MB per batch
 la_tx_timeout_secs = 5            # Timeout for batch sending (5 seconds)
 la_stats_period_secs = 10
 
-# Config for JSON port.
-# This is used to receive data from the Core
-json_udp_enabled = False
-json_udp_port = 30502
 

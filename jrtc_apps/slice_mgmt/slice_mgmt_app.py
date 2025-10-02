@@ -81,72 +81,6 @@ class AppStateVars:
     
 
 
-
-###########################################################################################
-# Class to handle reception of JSON message
-###########################################################################################
-class JsonUDPServer:
-
-    def __init__(self, ip: str, port: int, state: AppStateVars):
-        self.ip = ip
-        self.port = port
-        self.state = state
-        self.running = True
-        self.sock = None
-        self.start_udp_server_thread()
-
-    def start_udp_server_thread(self):
-        self.state.logger.log_msg(True, False, "", f"Starting UDP server thread")
-        self.server_thread = threading.Thread(target=self.udp_server)
-        self.server_thread.daemon = True  # Allows program to exit
-        self.server_thread.start()
-
-    def udp_server(self):
-        try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.sock.bind((self.ip, self.port))
-            self.state.logger.log_msg(True, False, "", f"UDP server listening on {self.ip}:{self.port}")
-
-            while self.running:
-                try:
-                    data, addr = self.sock.recvfrom(1024)
-                    if len(data) > 0:
-                        self.json_handler_func(data.decode())
-                except Exception as e:
-                    print(f"JsonUDPServer: udp_server: error: {e}", flush=True)
-                    traceback.print_exc()
-        finally:
-            if self.sock:
-                self.sock.close()
-                self.state.logger.log_msg(True, False, "", "UDP server socket closed")
-
-    def stop(self):
-        self.running = False
-        if self.sock:
-            try:
-                # Sending dummy data to unblock recvfrom
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.sendto(b'', (self.ip, self.port))
-                sock.close()
-            except Exception:
-                pass
-        if self.server_thread:
-            self.server_thread.join()
-                
-
-    ##########################################################################
-    def json_handler_func(self, json_str: str) -> None:
-
-        global rlog_enabled
-        global log_enabled
-
-        with app_lock:
-
-            j = json.loads(json_str)
-
-            print(f"json_handler_func : {j}", flush=True)
-
-
 ##########################################################################
 def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_data_entry, state: AppStateVars):
 
@@ -386,16 +320,8 @@ def jrtc_start_app(capsule):
 
     state.logger.log_msg(True, True, "", f"Number of subscribed streams: {len(streams)}")
 
-    # start thread for json udp pp
-    if params.json_udp_enabled is True:
-        json_udp_server = JsonUDPServer("0.0.0.0", params.json_udp_port, state)
-
     # run the app - This is blocking until the app exists
     jrtc_app_run(state.app)
-
-    # stop thread for json udp pp
-    if params.json_udp_enabled is True:
-        json_udp_server.stop()
 
     # clean up app resources
     jrtc_app_destroy(state.app)
