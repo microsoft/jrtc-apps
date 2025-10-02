@@ -129,7 +129,7 @@ uint64_t jbpf_main(void* state)
             return JBPF_CODELET_FAILURE;
         }        
 
-        jbpf_printf_debug("latest config sent to higher layers, ind->slice_count = %d\n", ind->slice_count);
+        jbpf_printf_debug("slice-allocation INDICATION sent to higher layers\n");
 
         // clear trigger flag
         *indication_triggered = 0;
@@ -173,13 +173,13 @@ uint64_t jbpf_main(void* state)
 
         // does the request have sfn/slot set, and match the currennt sfn/slot of the RAN
         bool update_ran_now = 
-            (!set_request->request.has_sfn        || set_request->request.sfn == sfn) ||
+            (!set_request->request.has_sfn        || set_request->request.sfn == sfn) &&
             (!set_request->request.has_slot_index || set_request->request.slot_index == slot_index);
 
         // update the RAN now if sf/slot matches.
         if (update_ran_now) {
 
-            jbpf_printf_debug("New allocation will be configured now (sfn/slot=%d/%d) \n", sfn, slot_index);
+            jbpf_printf_debug("New slice-allocation will be configured now (sfn/slot=%d/%d) \n", sfn, slot_index);
 
             // clear flag so we dont repeatedly process the request
             set_request->requested = 0;            
