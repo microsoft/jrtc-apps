@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=../../tools/schemas/jrtc-ctl..schema.json
+
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
+name: dashboard
+    
+decoder:
+  - type: decodergrpc
+    port: 30501
+    #port: 20789
+      
+
+jbpf:
+  device:
+    - id: 1
+      port: 30450
+
+  codelet_set:
+
+    - device: 1
+      config: ${JBPF_CODELETS}/slice_mgmt/slice_mgmt.yaml
+
+ 

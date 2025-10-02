@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../../tools/schemas/jrtc-ctl..schema.json
+
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
+name: slice_mgmt
+
+app:
+  - name: slice_mgmt
+    path: ${JRTC_APPS}/slice_mgmt/slice_mgmt_app.py
+    type: python
+    port: 30500
+    modules:
+      - ${JRTC_APPS}/slice_mgmt/slice_mgmt_app_params.py
+      - ${JRTC_APPS}/libs/logger.py
+      - ${JRTC_APPS}/libs/la_logger.py
+
+      - ${JBPF_CODELETS}/slice_mgmt/slice_mgmt.py
+
+jbpf:
+  device:
+    - id: 1
+      port: 30450
+
+  codelet_set:
+
+    - device: 1
+      config: ${JBPF_CODELETS}/slice_mgmt/slice_mgmt.yaml
+
