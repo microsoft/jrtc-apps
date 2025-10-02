@@ -1,6 +1,22 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+"""
+Slice Management Application for JRTC
+
+This application integrates with the JRTC framework to manage RAN slice
+allocations. It subscribes to slice management indication streams, logs slice
+allocation data, and periodically issues slice allocation updates. The app
+supports both local logging and optional remote logging to Azure Log Analytics.
+
+Key features:
+- Initializes a JRTC application with request and indication streams for slice management.
+- Sends an initial GET request to retrieve current slice allocations.
+- Processes slice allocation indications, logs details, and stores state.
+- Periodically sends SET requests to update slice allocations (e.g., swapping slice 0/1 configs).
+"""
+
+
 import time
 import json
 import os
