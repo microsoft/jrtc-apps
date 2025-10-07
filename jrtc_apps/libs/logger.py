@@ -15,9 +15,10 @@ class Logger:
 
     # {
     ############################################
-    def __init__(self, hostname, stream_id, stream_type, remote_logger=None):
+    def __init__(self, device, hostname, stream_id, stream_type, remote_logger=None):
         # print(f"logger(): __init__ : stream_id={stream_id} remote_logger={remote_logger}")
         # cfg
+        self.device = device
         self.hostname = hostname
         self.stream_id = stream_id
         self.stream_type = stream_type
@@ -41,6 +42,7 @@ class Logger:
         if rlog and (self.remote_logger is not None):
             
             j = {
+                "device": self.device,
                 "hostname": self.hostname,
                 "stream_id": self.stream_id,
                 "stream_type": self.stream_type,

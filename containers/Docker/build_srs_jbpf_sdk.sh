@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BASE_IMAGE_TAG=latest
-IMAGE_TAG=latest
+IMAGE_TAG=srsran25.04-latest
 
 Usage()
 {
@@ -9,7 +9,7 @@ Usage()
    echo "Build srsRan=Jbpf base image"
    echo "options:"
    echo "[-b]    Optional base image tag.  Default='latest'"
-   echo "[-s]    Optional srsRan image tag.  Default='latest'"
+   echo "[-s]    Optional srsRan image tag.  Default='srsran25.04-latest'"
    echo
 }
 

@@ -146,6 +146,23 @@ spec:
         args: [ "while true; do sleep 30; done;" ]
       {{- end }}
 
+      {{- if eq (int $.Values.jbpf.cfg.jbpf_enable_ipc) 1 }}
+      {{- if $.Values.udp_forwarder.enabled }}
+      - name: udpforwarder
+        image: {{ $.Values.image.srs_jbpf }}
+        imagePullPolicy: {{ $.Values.image.pullPolicy }}
+        env:
+          - name: LISTEN_IP
+            value: "{{ $.Values.sriov.cucp_ip }}"
+          - name: LISTEN_PORT
+            value: "{{ add $.Values.udp_forwarder.port $ran_cnt }}"
+          - name: FORWARD_IP
+            value: "jrtc-udp-input.{{ $.Release.Namespace }}.svc.cluster.local"
+          - name: FORWARD_PORT
+            value: "{{ $.Values.udp_forwarder.port }}"
+        command: ["/udp_forwarder/udp_forwarder.sh"]
+      {{- end }}
+      {{- end }}
 
       - name: gnb
         image: "{{ $.Values.image.srs_jbpf }}"
@@ -244,7 +261,7 @@ spec:
 
 ---
 
-# DNS name: janus-gnb-#-io-in.{{ $.Release.Namespace }}.svc.cluster.local
+# DNS name: srs-gnb-{{ $ran_name }}-io-in.{{ $.Release.Namespace }}.svc.cluster.local
 kind: Service
 apiVersion: v1
 metadata:
@@ -266,8 +283,7 @@ spec:
 
 ---
 
-
-# DNS name: janus-gnb-#-agent.{{ $.Release.Namespace }}.svc.cluster.local
+# DNS name: srs-gnb-{{ $ran_name }}-proxy.{{ $.Release.Namespace }}.svc.cluster.local
 kind: Service
 apiVersion: v1
 metadata:
@@ -285,6 +301,27 @@ spec:
       port: {{ add $.Values.jbpf.port $ran_cnt }}
       targetPort: {{ add $.Values.jbpf.port $ran_cnt }}
       nodePort: {{ add $.Values.jbpf.port $ran_cnt }}
+
+---
+
+# DNS name:srs-gnb-{{ $ran_name }}-udpforwarder.{{ $.Release.Namespace }}.svc.cluster.local
+kind: Service
+apiVersion: v1
+metadata:
+  name: srs-gnb-{{ $ran_name }}-udpforwarder
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: srs-gnb-{{ $ran_name }}
+spec:
+  selector:
+    app: srs-gnb-{{ $ran_name }}
+  type: NodePort
+  ports:
+    - name: udpforwarder-port
+      protocol: UDP
+      port: {{ add $.Values.udp_forwarder.port $ran_cnt }}
+      targetPort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
+      nodePort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
 
 
 {{ $ran_cnt = add1 $ran_cnt }}

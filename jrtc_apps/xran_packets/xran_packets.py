@@ -22,15 +22,14 @@ from xran_packet_info import struct__packet_stats
 
 ##########################################################################
 # Define the state variables for the application
-class AppStateVars(ctypes.Structure):
-    _fields_ = [
-        ("app", ctypes.POINTER(JrtcApp))
-    ]        
+@dataclass
+class AppStateVars:
+    app: JrtcApp
 
 
 ##########################################################################
 # Handler callback function (this function gets called by the C library)
-def app_handler(timeout: bool, stream_idx: int, data_entry_ptr: ctypes.POINTER(struct_jrtc_router_data_entry), state_ptr: int):
+def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_data_entry, state: AppStateVars):
 
     XRAN_CODELET_OUT_SIDX = 0
 
@@ -41,10 +40,6 @@ def app_handler(timeout: bool, stream_idx: int, data_entry_ptr: ctypes.POINTER(s
         pass
 
     else:
-        
-        # Dereference the pointer arguments
-        state = ctypes.cast(state_ptr, ctypes.POINTER(AppStateVars)).contents        
-        data_entry = data_entry_ptr.contents
 
         if stream_idx == XRAN_CODELET_OUT_SIDX:
 
@@ -61,6 +56,7 @@ def app_handler(timeout: bool, stream_idx: int, data_entry_ptr: ctypes.POINTER(s
             print(f"Hi App 1: timestamp: {data.timestamp}")
             print(f"DL Ctl: {dl_control_stats.Packet_count} {list(dl_control_stats.packet_inter_arrival_info.hist)}")
             print(f"DL Data: {dl_data_stats.Packet_count} {dl_data_stats.Prb_count} {list(dl_data_stats.packet_inter_arrival_info.hist)}")
+            print(f"UL Data: {ul_data_stats.Packet_count} {ul_data_stats.Prb_count} {list(ul_data_stats.packet_inter_arrival_info.hist)}")
 
        
 ##########################################################################
@@ -91,7 +87,7 @@ def jrtc_start_app(capsule):
     )
 
     # Initialize the app
-    state = AppStateVars()
+    state = AppStateVars(app=None)
     state.app = jrtc_app_create(capsule, app_cfg, app_handler, state)
 
     # run the app - This is blocking until the app exists

@@ -171,8 +171,6 @@ def update_config(input_files, config_file, output_file, split, du_name):
             if ru.get("ulPortID"):
                 config_data['ru_ofh']['cells'][ind]['ul_port_id'] = ru["ulPortID"]
             ruBandwidth = list(du_config['cells'].values())[ind].get('ruBandwidth')                
-            if ruBandwidth:
-                config_data['ru_ofh']['cells'][ind]['ru_bandwidth_MHz'] = int(ruBandwidth)
 
 
             pcie_addr = get_sriov_device_pci(ru.get("ruDPDKResource"))
@@ -194,8 +192,6 @@ def update_config(input_files, config_file, output_file, split, du_name):
                 config_data['cells'][ind]['pci'] = ru["physicalCellID"]
             if ru.get("ruDLArfcn"):
                 config_data['cells'][ind]['dl_arfcn'] = ru["ruDLArfcn"]
-            if ru.get("ruBandwidth"):
-                config_data['cells'][ind]['channel_bandwidth_MHz'] = ru["ruBandwidth"]
             if ru.get("prachPortID"):
                 config_data['ru_ofh']['cells'][ind]['prach_port_id'] = ru["prachPortID"]
             if ru.get("dlPortID"):
@@ -221,9 +217,12 @@ def update_config(input_files, config_file, output_file, split, du_name):
     # Extract local CUUP IP address to announce to the AMF
     sriov = input_data['sriov']
     cuup_ip = sriov['cuup_ip']
-    ensure_path_exists(config_data, 'cu_up.upf')
-    config_data['cu_up']['upf']['ext_addr'] = cuup_ip
-
+    ensure_path_exists(config_data, 'cu_up.ngu.socket')
+    cuup_sock = {
+        "bind_addr": cuup_ip
+    }
+    config_data['cu_up']['ngu']['socket'] = []
+    config_data['cu_up']['ngu']['socket'].append(cuup_sock)
 
     # NOTE: not tested
     if split:

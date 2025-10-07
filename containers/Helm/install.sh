@@ -2,8 +2,7 @@
 
 
 CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
-
-
+source $(dirname $(dirname "$CURRENT_DIR"))/set_vars.sh
 
 # Helper function
 print_image_tag() {
@@ -112,17 +111,27 @@ if [ "$USE_JRTC" -eq 1 ]; then
     if [ -z "$JBPF_APPS" ]; then
         JBPF_APPS=$(realpath "${CURRENT_DIR}/../../jrtc_apps/")
     fi
-    JRTC_OPTIONS=" --set-string  jrtc_controller.apps_vol_mount=$JBPF_APPS "
+    JRTC_OPTIONS=" --set-string  jrtc_controller.apps_vol_mount=$JBPF_APPS \
+                   --set-string  HOSTNAME=$(hostname) \
+    "
     echo "App mount point: ${JBPF_APPS}"
 else
     JRTC_OPTIONS=""
 fi
 
+
+# IMAGES
+SRSRAN_IMAGES="\
+--set-string         image.srs_jbpf=ghcr.io/microsoft/jrtc-apps/srs-jbpf:$SRSRAN_IMAGE_TAG \
+--set-string         image.srs_jbpf_proxy=ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:$SRSRAN_IMAGE_TAG \
+"
+
+
 kubectl create namespace ran || true
 
 
 helm install \
-    $EXTRA_VALUES $DEBUG_OPTIONS $JBPF_OPTIONS $LA_OPTIONS $JRTC_OPTIONS -n ran ran $HELM_URL
+    $EXTRA_VALUES $DEBUG_OPTIONS $JBPF_OPTIONS $LA_OPTIONS $JRTC_OPTIONS $SRSRAN_IMAGES -n ran ran $HELM_URL
 
 
 

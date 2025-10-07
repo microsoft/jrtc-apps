@@ -27,12 +27,14 @@ WORKDIR /src/build
 # Temporary fix for failing jbpf tests in RELEASE mode. To be removed when jbpf tests are fixed.
 #RUN cmake .. -DENABLE_DPDK=True -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF
 RUN cmake .. -DENABLE_DPDK=True -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF -DCMAKE_C_FLAGS="-Wno-error=unused-variable"
-RUN make -j
+RUN make -j VERBOSE=1
 RUN make install
 
 ADD Scripts /opt/Scripts
 WORKDIR /opt/Scripts
 RUN pip3 install -r requirements.txt
+
+ADD udp_forwarder /udp_forwarder 
 
 ENTRYPOINT [ "run.sh" ]
 

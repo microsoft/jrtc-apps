@@ -10,6 +10,7 @@
 
 #include "../utils/misc_utils.h"
 #include "../utils/hashmap_utils.h"
+#include "../utils/stats_utils.h"
 
 
 #define SEC(NAME) __attribute__((section(NAME), used))
@@ -90,22 +91,22 @@ uint64_t jbpf_main(void* state)
 
     /////////////////////////////////////////////
     // sdu_delivered_bytes
-    RLC_TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_delivered_bytes, sdu_length);
+    TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_delivered_bytes, sdu_length);
 
     /////////////////////////////////////////////
     // sdu_delivered_latency
-    RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_delivered_latency, latency_ns);
+    STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_delivered_latency, latency_ns);
 
     /////////////////////////////////////////////
     // UM
     if (out->stats[ind % MAX_NUM_UE_RB].has_um) {
-        RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].um.pdu_window_pkts, rlc_ctx.u.um_rx.window_num_pkts);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].um.pdu_window_pkts, rlc_ctx.u.um_rx.window_num_pkts);
     }	
 	
     /////////////////////////////////////////////
     // AM
     if (out->stats[ind % MAX_NUM_UE_RB].has_am) {
-        RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_pkts, rlc_ctx.u.am_rx.window_num_pkts);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_pkts, rlc_ctx.u.am_rx.window_num_pkts);
     }	
      
     *not_empty_stats = 1;

@@ -138,14 +138,16 @@ class LaLogger:
                 tmp.write(data.encode('utf-8'))
                 tmp.flush()  # Ensure data is written
 
-
+                curl_timeout = (self.cfg.batch_timeout_secs - 1) if self.cfg.batch_timeout_secs > 4 else 4
+              
                 cmd = ["curl", "-X", "POST", uri, "-H", f"Content-Type: {headers['content-type']}", 
                     "-H", f"Authorization: {headers['Authorization']}", 
                     "-H", f"Log-Type: {headers['Log-Type']}", 
                     "-H", f"x-ms-date: {headers['x-ms-date']}", 
-                    "--data-binary",  f"@{tmp.name}"
+                    "--data-binary",  f"@{tmp.name}",
+                    "--max-time", f"{curl_timeout}"  
                 ]
-            
+
                 result = subprocess.run(cmd, capture_output=True, text=True)
 
                 if result.returncode != 0:

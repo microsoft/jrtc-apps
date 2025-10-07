@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+//ontainers/Docker/srsRAN_Project Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
 #include <linux/bpf.h>
@@ -6,6 +6,7 @@
 #include "jbpf_srsran_contexts.h"
 #include "srsran/scheduler/scheduler_feedback_handler.h"
 
+#include "mac_helpers.h"
 #include "mac_sched_uci_stats.pb.h"
 
 #include "../utils/misc_utils.h"
@@ -16,8 +17,8 @@
 #include "jbpf_defs.h"
 #include "jbpf_helper.h"
 #include "jbpf_helper_utils.h"
+#include "../utils/stats_utils.h"
 
-#define MAX_NUM_UE (32)
 
 struct jbpf_load_map_def SEC("maps") uci_not_empty = {
     .type = JBPF_MAP_TYPE_ARRAY,
@@ -38,19 +39,6 @@ struct jbpf_load_map_def SEC("maps") stats_map_uci = {
 DEFINE_PROTOHASH_32(uci_hash, MAX_NUM_UE);
 
 
-
-
-#define STATS_UPDATE(dest, src)   \
-    do {                                  \
-        dest.count++;                     \
-        if (src < dest.min) {             \
-            dest.min = src;               \
-        }                                 \
-        if (src > dest.max) {             \
-            dest.max = src;               \
-        }                                 \
-        dest.total += src;                \
-    } while (0)
 
 
 //#define DEBUG_PRINT
@@ -89,9 +77,6 @@ uint64_t jbpf_main(void* state)
         out->stats[ind % MAX_NUM_UE].time_advance_offset.min = UINT32_MAX;
         out->stats[ind % MAX_NUM_UE].time_advance_offset.max = 0;
         out->stats[ind % MAX_NUM_UE].has_time_advance_offset = false;
-        out->stats[ind % MAX_NUM_UE].harq.ack_count = 0;
-        out->stats[ind % MAX_NUM_UE].harq.nack_count = 0;
-        out->stats[ind % MAX_NUM_UE].harq.dtx_count = 0;
         out->stats[ind % MAX_NUM_UE].csi.ri.count = 0;
         out->stats[ind % MAX_NUM_UE].csi.ri.total = 0;
         out->stats[ind % MAX_NUM_UE].csi.ri.min = UINT32_MAX;
@@ -115,47 +100,25 @@ uint64_t jbpf_main(void* state)
         } 
         
         // harqs
-        if (not pucch_f0f1->harqs.empty()) {
-             for (unsigned harq_idx = 0, harq_end_idx = pucch_f0f1->harqs.size(); harq_idx != harq_end_idx; ++harq_idx) {
-                const auto& harq = pucch_f0f1->harqs[harq_idx];
-                if (harq == srsran::mac_harq_ack_report_status::ack) {
-                    out->stats[ind % MAX_NUM_UE].harq.ack_count++;
-                } else if (harq == srsran::mac_harq_ack_report_status::nack) {
-                    out->stats[ind % MAX_NUM_UE].harq.nack_count++;
-                } else if (harq == srsran::mac_harq_ack_report_status::dtx) {
-                    out->stats[ind % MAX_NUM_UE].harq.dtx_count++;
-                }
-             }  
-        }
+        // The harqs are nort read here as they could gove misleading results.
+        // For correct HARQ ACK, yuse the mac_sched_dl_harq_stst.cpp codelet.
 
         // timing advance
         const bool is_uci_valid = not pucch_f0f1->harqs.empty() or pucch_f0f1->sr_detected;
         if (is_uci_valid and pucch_f0f1->time_advance_offset.has_value() and pucch_f0f1->ul_sinr_dB.has_value()) {
 
             // Cant handle SINR as it is floating point
-            // out->stats[ind % MAX_NUM_UE].ul_sinr_dB.count++;    
-            // out->stats[ind % MAX_NUM_UE].ul_sinr_dB.total += static_cast<uint64_t>(pucch_f0f1->ul_sinr_dB.value());
 
             // // timing advance offset
-            // STATS_UPDATE(out->stats[ind % MAX_NUM_UE].time_advance_offset, static_cast<uint64_t>(pucch_f0f1->time_advance_offset->to_Tc()));
-            // out->stats[ind % MAX_NUM_UE].has_time_advance_offset = true;
+            STATS_UPDATE(out->stats[ind % MAX_NUM_UE].time_advance_offset, static_cast<uint64_t>(pucch_f0f1->time_advance_offset->to_Tc()));
+            out->stats[ind % MAX_NUM_UE].has_time_advance_offset = true;
         }
 
     } else if (const auto* pusch_pdu = std::get_if<srsran::uci_indication::uci_pdu::uci_pusch_pdu>(&uci_pdu.pdu)) {
 
         // harqs
-        if (not pusch_pdu->harqs.empty()) {
-            for (unsigned harq_idx = 0, harq_end_idx = pusch_pdu->harqs.size(); harq_idx != harq_end_idx; ++harq_idx) {
-                const auto& harq = pusch_pdu->harqs[harq_idx];
-                if (harq == srsran::mac_harq_ack_report_status::ack) {
-                    out->stats[ind % MAX_NUM_UE].harq.ack_count++;
-                } else if (harq == srsran::mac_harq_ack_report_status::nack) {
-                    out->stats[ind % MAX_NUM_UE].harq.nack_count++;
-                } else if (harq == srsran::mac_harq_ack_report_status::dtx) {
-                    out->stats[ind % MAX_NUM_UE].harq.dtx_count++;
-                }
-            }  
-        }
+        // The harqs are nort read here as they could gove misleading results.
+        // For correct HARQ ACK, yuse the mac_sched_dl_harq_stst.cpp codelet.
 
         // csi
         if (pusch_pdu->csi.has_value()) {
@@ -191,18 +154,8 @@ uint64_t jbpf_main(void* state)
         }   
 
         // harqs
-        if (not pucch_f2f3f4->harqs.empty()) {
-            for (unsigned harq_idx = 0, harq_end_idx = pucch_f2f3f4->harqs.size(); harq_idx != harq_end_idx; ++harq_idx) {
-                const auto& harq = pucch_f2f3f4->harqs[harq_idx];
-                if (harq == srsran::mac_harq_ack_report_status::ack) {
-                    out->stats[ind % MAX_NUM_UE].harq.ack_count++;
-                } else if (harq == srsran::mac_harq_ack_report_status::nack) {
-                    out->stats[ind % MAX_NUM_UE].harq.nack_count++;
-                } else if (harq == srsran::mac_harq_ack_report_status::dtx) {
-                    out->stats[ind % MAX_NUM_UE].harq.dtx_count++;
-                }
-            }  
-        }
+        // The harqs are nort read here as they could gove misleading results.
+        // For correct HARQ ACK, yuse the mac_sched_dl_harq_stst.cpp codelet.
 
         // csi
         if (pucch_f2f3f4->csi.has_value()) {
@@ -227,19 +180,20 @@ uint64_t jbpf_main(void* state)
             out->stats[ind % MAX_NUM_UE].has_csi = true;
         }
 
-        // // timing advance
-        // const bool is_uci_valid =
-        //     not pucch_f2f3f4->harqs.empty() or
-        //     (not pucch_f2f3f4->sr_info.empty() and pucch_f2f3f4->sr_info.test(sr_bit_position_with_1_sr_bit)) or
-        //     pucch_f2f3f4->csi.has_value();
-        // // Process Timing Advance Offset.
-        // if (is_uci_valid and pucch_f2f3f4->time_advance_offset.has_value() and
-        //     pucch_f2f3f4->ul_sinr_dB.has_value()) {
+        // timing advance
+        const bool is_uci_valid =
+            //not pucch_f2f3f4->harqs.empty() or
+            (not pucch_f2f3f4->sr_info.empty() and pucch_f2f3f4->sr_info.test(sr_bit_position_with_1_sr_bit)) or
+            pucch_f2f3f4->csi.has_value();
 
-        //     // Handle UL SINR and Timing Advance Offset
-        //     STATS_UPDATE(out->stats[ind % MAX_NUM_UE].time_advance_offset, static_cast<uint64_t>(pucch_f2f3f4->time_advance_offset->to_Tc()));
-        //     out->stats[ind % MAX_NUM_UE].has_time_advance_offset = true;
-        // }
+        // Process Timing Advance Offset.
+        if (is_uci_valid and pucch_f2f3f4->time_advance_offset.has_value() and
+            pucch_f2f3f4->ul_sinr_dB.has_value()) {
+
+            // Handle UL SINR and Timing Advance Offset
+            STATS_UPDATE(out->stats[ind % MAX_NUM_UE].time_advance_offset, static_cast<uint64_t>(pucch_f2f3f4->time_advance_offset->to_Tc()));
+            out->stats[ind % MAX_NUM_UE].has_time_advance_offset = true;
+        }
 
     } else {
         // jbpf_printf_debug("Unknown UCI PDU type\n");

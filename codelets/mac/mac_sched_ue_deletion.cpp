@@ -14,9 +14,12 @@
 #include "jbpf_srsran_contexts.h"
 #include "srsran/scheduler/scheduler_feedback_handler.h"
 
+#include "mac_helpers.h"
+
 #include "mac_sched_bsr_stats.pb.h"
 #include "mac_sched_crc_stats.pb.h"
 #include "mac_sched_uci_stats.pb.h"
+#include "mac_sched_harq_stats.pb.h"
 
 #include "../utils/misc_utils.h"
 #include "../utils/hashmap_utils.h"
@@ -27,7 +30,7 @@
 #include "jbpf_helper.h"
 #include "jbpf_helper_utils.h"
 
-#define MAX_NUM_UE (32)
+
 
 
 struct jbpf_load_map_def SEC("maps") stats_map_bsr = {
@@ -51,9 +54,25 @@ struct jbpf_load_map_def SEC("maps") stats_map_uci = {
     .max_entries = 1,
 };
 
+struct jbpf_load_map_def SEC("maps") stats_map_dl_harq = {
+    .type = JBPF_MAP_TYPE_ARRAY,
+    .key_size = sizeof(int),
+    .value_size = sizeof(harq_stats),
+    .max_entries = 1,
+};
+
+struct jbpf_load_map_def SEC("maps") stats_map_ul_harq = {
+    .type = JBPF_MAP_TYPE_ARRAY,
+    .key_size = sizeof(int),
+    .value_size = sizeof(harq_stats),
+    .max_entries = 1,
+};
+
 DEFINE_PROTOHASH_32(bsr_hash, MAX_NUM_UE);
 DEFINE_PROTOHASH_32(crc_hash, MAX_NUM_UE);
 DEFINE_PROTOHASH_32(uci_hash, MAX_NUM_UE);
+DEFINE_PROTOHASH_32(dl_harq_hash, MAX_NUM_UE);
+DEFINE_PROTOHASH_32(ul_harq_hash, MAX_NUM_UE);
 
 
 
@@ -81,6 +100,14 @@ uint64_t jbpf_main(void* state)
     if (!uci_out)
         return JBPF_CODELET_FAILURE;
 
+    harq_stats *dl_harq_out = (harq_stats *)jbpf_map_lookup_elem(&stats_map_dl_harq, &zero_index);
+    if (!dl_harq_out)
+        return JBPF_CODELET_FAILURE;
+
+    harq_stats *ul_harq_out = (harq_stats *)jbpf_map_lookup_elem(&stats_map_ul_harq, &zero_index);
+    if (!ul_harq_out)
+        return JBPF_CODELET_FAILURE;
+
 
     int new_val = 0;
 
@@ -89,17 +116,21 @@ uint64_t jbpf_main(void* state)
     bsr_out->stats[ind % MAX_NUM_UE].bytes = 0;
 
     ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(crc_out, stats, crc_hash, ctx->du_ue_index, new_val);
-    crc_out->stats[ind % MAX_NUM_UE].cons_min = UINT32_MAX;
+    uint16_t MAX_NUM_RETX_HIST = (sizeof(crc_out->stats[ind % MAX_NUM_UE].retx_hist) / sizeof(crc_out->stats[ind % MAX_NUM_UE].retx_hist[0]));
     crc_out->stats[ind % MAX_NUM_UE].cons_max = 0;
     crc_out->stats[ind % MAX_NUM_UE].succ_tx = 0;
     crc_out->stats[ind % MAX_NUM_UE].cnt_tx = 0;
-    crc_out->stats[ind % MAX_NUM_UE].min_sinr = UINT32_MAX;
-    crc_out->stats[ind % MAX_NUM_UE].min_rsrp = UINT32_MAX;
-    crc_out->stats[ind % MAX_NUM_UE].max_sinr = 0;
-    crc_out->stats[ind % MAX_NUM_UE].max_rsrp = INT32_MIN;
+    for (int i = 0; i < MAX_NUM_RETX_HIST; ++i) {
+        crc_out->stats[ind % MAX_NUM_UE].retx_hist[i] = 0;
+    }
+    crc_out->stats[ind % MAX_NUM_UE].harq_failure = 0;
+    crc_out->stats[ind % MAX_NUM_UE].min_sinr = INT16_MAX;
+    crc_out->stats[ind % MAX_NUM_UE].max_sinr = INT16_MIN;
     crc_out->stats[ind % MAX_NUM_UE].sum_sinr = 0;
-    crc_out->stats[ind % MAX_NUM_UE].sum_rsrp = 0;
     crc_out->stats[ind % MAX_NUM_UE].cnt_sinr = 0;
+    crc_out->stats[ind % MAX_NUM_UE].min_rsrp = UINT32_MAX;
+    crc_out->stats[ind % MAX_NUM_UE].max_rsrp = 0;
+    crc_out->stats[ind % MAX_NUM_UE].sum_rsrp = 0;
     crc_out->stats[ind % MAX_NUM_UE].cnt_rsrp = 0;
 
     ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(uci_out, stats, uci_hash, ctx->du_ue_index, new_val);
@@ -110,9 +141,6 @@ uint64_t jbpf_main(void* state)
     uci_out->stats[ind % MAX_NUM_UE].time_advance_offset.min = UINT32_MAX;
     uci_out->stats[ind % MAX_NUM_UE].time_advance_offset.max = 0;
     uci_out->stats[ind % MAX_NUM_UE].has_time_advance_offset = false;
-    uci_out->stats[ind % MAX_NUM_UE].harq.ack_count = 0;
-    uci_out->stats[ind % MAX_NUM_UE].harq.nack_count = 0;
-    uci_out->stats[ind % MAX_NUM_UE].harq.dtx_count = 0;
     uci_out->stats[ind % MAX_NUM_UE].csi.ri.count = 0;
     uci_out->stats[ind % MAX_NUM_UE].csi.ri.total = 0;
     uci_out->stats[ind % MAX_NUM_UE].csi.ri.min = UINT32_MAX;
@@ -125,6 +153,11 @@ uint64_t jbpf_main(void* state)
     uci_out->stats[ind % MAX_NUM_UE].csi.has_cqi = false;
     uci_out->stats[ind % MAX_NUM_UE].has_csi = false;
 
-    
+    ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(dl_harq_out, stats, dl_harq_hash, ctx->du_ue_index, new_val);
+    MAC_HARQ_STATS_INIT_DL(dl_harq_out->stats[ind % MAX_NUM_UE], ctx->cell_id, ctx->rnti, ctx->du_ue_index);
+
+    ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(ul_harq_out, stats, ul_harq_hash, ctx->du_ue_index, new_val);
+    MAC_HARQ_STATS_INIT_UL(ul_harq_out->stats[ind % MAX_NUM_UE], ctx->cell_id, ctx->rnti, ctx->du_ue_index);
+
     return JBPF_CODELET_SUCCESS;
 }

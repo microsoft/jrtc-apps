@@ -70,28 +70,26 @@ cells:
     dl_arfcn: 630684
 
 ru_ofh:
-  ### Commented out and moved to cells due to a likely bug in SRS described here: https://github.com/srsran/srsRAN_Project/issues/987
-  # ru_bandwidth_MHz: 40
-  # t1a_max_cp_dl: 470
-  # t1a_min_cp_dl: 258
-  # t1a_max_cp_ul: 429
-  # t1a_min_cp_ul: 285
-  # t1a_max_up: 196
-  # t1a_min_up: 50
-  # ta4_max: 75
-  # ta4_min: 0
-  # is_prach_cp_enabled: true
-  # is_dl_broadcast_enabled: false
-  # ignore_ecpri_payload_size: true
-  # compr_method_ul: bfp
-  # compr_bitwidth_ul: 9
-  # compr_method_dl: bfp
-  # compr_bitwidth_dl: 9
-  # compr_method_prach: none
-  # compr_bitwidth_prach: 16
-  # enable_ul_static_compr_hdr: false
-  # enable_dl_static_compr_hdr: false
-  # iq_scaling: 2.0
+  ru_bandwidth_MHz: 40
+  t1a_max_cp_dl: 470
+  t1a_min_cp_dl: 258
+  t1a_max_cp_ul: 429
+  t1a_min_cp_ul: 285
+  t1a_max_up: 196
+  t1a_min_up: 50
+  ta4_max: 75
+  ta4_min: 0
+  is_prach_cp_enabled: true
+  ignore_ecpri_payload_size: true
+  compr_method_ul: bfp
+  compr_bitwidth_ul: 9
+  compr_method_dl: bfp
+  compr_bitwidth_dl: 9
+  compr_method_prach: none
+  compr_bitwidth_prach: 16
+  enable_ul_static_compr_hdr: false
+  enable_dl_static_compr_hdr: false
+  iq_scaling: 2.0
   cells:
   - network_interface: 0000:3f:00.5    # PCI address of the NIC card in your server
     ru_mac_addr: e2:53:8d:8f:a4:6b
@@ -101,31 +99,6 @@ ru_ofh:
     prach_port_id: [4, 5, 6, 7]
     dl_port_id: [0, 1, 2, 3]
     ul_port_id: [0, 1, 2, 3]
-
-    ### Moved here due to a likely bug in SRS described here: https://github.com/srsran/srsRAN_Project/issues/987
-    ru_bandwidth_MHz: 40
-    t1a_max_cp_dl: 470
-    t1a_min_cp_dl: 258
-    t1a_max_cp_ul: 429
-    t1a_min_cp_ul: 285
-    t1a_max_up: 196
-    t1a_min_up: 50
-    ta4_max: 75
-    ta4_min: 0
-    is_prach_cp_enabled: true
-    is_dl_broadcast_enabled: false
-    ignore_ecpri_payload_size: true
-    compr_method_ul: bfp
-    compr_bitwidth_ul: 9
-    compr_method_dl: bfp
-    compr_bitwidth_dl: 9
-    compr_method_prach: none
-    compr_bitwidth_prach: 16
-    enable_ul_static_compr_hdr: false
-    enable_dl_static_compr_hdr: false
-    iq_scaling: 2.0
-
-
 
 # Will be added by the update script
 #hal:

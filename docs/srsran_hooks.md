@@ -247,7 +247,7 @@ Context info:
   
 ### 5.2.5. __mac_sched_ul_phr_indication__
   
-    Context "data" field points to an srsran::ul_phr_indication_message structure.
+    Context "data" field points to an srsran::cell_ph_report structure.
   
 ### 5.2.6. __mac_sched_dl_buffer_state_indication__
   

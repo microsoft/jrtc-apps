@@ -5,7 +5,6 @@
 
 #include "jbpf_srsran_contexts.h"
 #include "srsran/scheduler/scheduler_feedback_handler.h"
-#include "srsran/mac/phr_report.h"
 
 #include "mac_sched_phr_stats.pb.h"
 
@@ -46,10 +45,10 @@ uint64_t jbpf_main(void* state)
     int zero_index=0;
     struct jbpf_mac_sched_ctx *ctx = (jbpf_mac_sched_ctx *)state;
     
-    const srsran::ul_phr_indication_message& mac_ctx = *reinterpret_cast<const srsran::ul_phr_indication_message*>(ctx->data);
+    const srsran::cell_ph_report& ph_report = *reinterpret_cast<const srsran::cell_ph_report*>(ctx->data);
 
     // Ensure the object is within valid bounds
-    if (reinterpret_cast<const uint8_t*>(&mac_ctx) + sizeof(srsran::ul_phr_indication_message) > reinterpret_cast<const uint8_t*>(ctx->data_end)) {
+    if (reinterpret_cast<const uint8_t*>(&ph_report) + sizeof(srsran::cell_ph_report) > reinterpret_cast<const uint8_t*>(ctx->data_end)) {
         return JBPF_CODELET_FAILURE;  // Out-of-bounds access
     }
 
@@ -65,51 +64,41 @@ uint64_t jbpf_main(void* state)
 
 
     out->timestamp = jbpf_time_get_ns();
-    //out->ue_index = ctx->du_ue_index;
-    //out->rnti = (uint32_t) mac_ctx.rnti;
 
 
+    int new_val = 0;
+    //uint64_t key = ((uint64_t)ctx->cell_id << 31) << 1 | (uint64_t)ctx->du_ue_index;
+    uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, phr_hash, ctx->cell_id, ctx->du_ue_index, new_val);
+    if (new_val) {
+        out->stats[ind % MAX_NUM_UE_CELL].du_ue_index = ctx->du_ue_index;
+        out->stats[ind % MAX_NUM_UE_CELL].cell_id = ctx->cell_id;
+        out->stats[ind % MAX_NUM_UE_CELL].ph_min = UINT32_MAX;
+        out->stats[ind % MAX_NUM_UE_CELL].ph_max = 0;
+        out->stats[ind % MAX_NUM_UE_CELL].p_cmax_min = UINT32_MAX;
+        out->stats[ind % MAX_NUM_UE_CELL].p_cmax_max = 0;
+    }
+    uint32_t ph_start = ph_report.ph.start();
+    uint32_t ph_stop = ph_report.ph.stop();
+    
+    if (out->stats[ind % MAX_NUM_UE_CELL].ph_min > ph_start) {
+        out->stats[ind % MAX_NUM_UE_CELL].ph_min = ph_start;
+    }
+    if (out->stats[ind % MAX_NUM_UE_CELL].ph_max < ph_stop) {
+        out->stats[ind % MAX_NUM_UE_CELL].ph_max = ph_stop;
+        
+    }
+    if (ph_report.p_cmax.has_value()) {
+        uint32_t cmax_start = ph_report.p_cmax.value().start();
+        uint32_t cmax_stop = ph_report.p_cmax.value().stop();
 
-    // NOTE: here I cannot use this call:
-    // struct srsran::cell_ph_report rep = static_cast<srsran::cell_ph_report>(mac_ctx.phr.get_se_phr());
-    // This seems to be because get_se_phr() calls standard method back() which doesn't seem to verify. 
-
-    auto ph_reports = mac_ctx.phr.get_phr();
-    for (int i=0; i<srsran::MAX_NOF_DU_CELLS; i++) {
-        if (i < ph_reports.size()) {
-            int new_val = 0;
-            //uint64_t key = ((uint64_t)ph_reports[i].serv_cell_id << 31) << 1 | (uint64_t)ctx->du_ue_index;
-            uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_64(out, stats, phr_hash, ph_reports[i].serv_cell_id, ctx->du_ue_index, new_val);
-            if (new_val) {
-                out->stats[ind % MAX_NUM_UE_CELL].ph_min = UINT32_MAX;
-                out->stats[ind % MAX_NUM_UE_CELL].ph_max = 0;
-                out->stats[ind % MAX_NUM_UE_CELL].p_cmax_min = UINT32_MAX;
-                out->stats[ind % MAX_NUM_UE_CELL].p_cmax_max = 0;
-            }
-            if (out->stats[ind % MAX_NUM_UE_CELL].ph_min > ph_reports[i].ph.start()) {
-                out->stats[ind % MAX_NUM_UE_CELL].ph_min = ph_reports[i].ph.start();
-            }
-            if (out->stats[ind % MAX_NUM_UE_CELL].ph_max < ph_reports[i].ph.stop()) {
-                out->stats[ind % MAX_NUM_UE_CELL].ph_max = ph_reports[i].ph.stop();
-                
-            }
-            // out->ph_reports[i].ph_min = ph_reports[i].ph.start();
-            // out->ph_reports[i].ph_max = ph_reports[i].ph.stop();
-            if (ph_reports[i].p_cmax.has_value()) {
-                if (out->stats[ind % MAX_NUM_UE_CELL].p_cmax_min > ph_reports[i].p_cmax.value().start()) {
-                    out->stats[ind % MAX_NUM_UE_CELL].p_cmax_min = ph_reports[i].p_cmax.value().start();
-                }
-                if (out->stats[ind % MAX_NUM_UE_CELL].p_cmax_max < ph_reports[i].p_cmax.value().stop()) {
-                    out->stats[ind % MAX_NUM_UE_CELL].p_cmax_max = ph_reports[i].p_cmax.value().stop();
-                }
-                // out->ph_reports[i].p_cmax_min = ph_reports[i].p_cmax.value().start();
-                // out->ph_reports[i].p_cmax_max = ph_reports[i].p_cmax.value().stop();
-            }
-            *not_empty_stats = 1;
-        } else {
-            break;
+        if (out->stats[ind % MAX_NUM_UE_CELL].p_cmax_min > cmax_start) {
+            out->stats[ind % MAX_NUM_UE_CELL].p_cmax_min = cmax_start;
+        }
+        if (out->stats[ind % MAX_NUM_UE_CELL].p_cmax_max < cmax_stop) {
+            out->stats[ind % MAX_NUM_UE_CELL].p_cmax_max = cmax_stop;
         }
     }
+    *not_empty_stats = 1;
 
 
     return JBPF_CODELET_SUCCESS;

@@ -39,6 +39,26 @@ codelet_descriptor:
             package_path: ${JBPF_CODELETS}/mac/mac_sched_uci_stats.pb
             msg_name: uci_stats
 
+  - codelet_name: mac_stats_collect_harq
+    codelet_path: ${JBPF_CODELETS}/mac/mac_stats_collect_harq.o
+    hook_name: report_stats
+    priority: 1
+    out_io_channel:
+      - name: output_map_dl_harq
+        forward_destination: DestinationNone
+        serde:
+          file_path: ${JBPF_CODELETS}/mac/mac_sched_harq_stats:harq_stats_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/mac/mac_sched_harq_stats.pb
+            msg_name: harq_stats
+      - name: output_map_ul_harq
+        forward_destination: DestinationNone
+        serde:
+          file_path: ${JBPF_CODELETS}/mac/mac_sched_harq_stats:harq_stats_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/mac/mac_sched_harq_stats.pb
+            msg_name: harq_stats
+
   - codelet_name: mac_sched_crc_stats
     codelet_path: ${JBPF_CODELETS}/mac/mac_sched_crc_stats.o
     hook_name: mac_sched_crc_indication
@@ -99,6 +119,37 @@ codelet_descriptor:
         linked_codelet_name: mac_stats_collect
         linked_map_name: uci_not_empty
 
+  - codelet_name: mac_sched_dl_harq_stats
+    codelet_path: ${JBPF_CODELETS}/mac/mac_sched_dl_harq_stats.o
+    hook_name: mac_sched_harq_dl
+    priority: 1
+    linked_maps:    
+      - map_name: stats_map_dl_harq
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: stats_map_dl_harq
+      - map_name: dl_harq_hash
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: dl_harq_hash
+      - map_name: dl_harq_not_empty
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: dl_harq_not_empty
+
+
+  - codelet_name: mac_sched_ul_harq_stats
+    codelet_path: ${JBPF_CODELETS}/mac/mac_sched_ul_harq_stats.o
+    hook_name: mac_sched_harq_ul
+    priority: 1
+    linked_maps:    
+      - map_name: stats_map_ul_harq
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: stats_map_ul_harq
+      - map_name: ul_harq_hash
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: ul_harq_hash
+      - map_name: ul_harq_not_empty
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: ul_harq_not_empty
+
   - codelet_name: mac_sched_ue_deletion
     codelet_path: ${JBPF_CODELETS}/mac/mac_sched_ue_deletion.o
     hook_name: mac_sched_ue_deletion
@@ -125,3 +176,16 @@ codelet_descriptor:
         linked_codelet_name: mac_stats_collect
         linked_map_name: uci_hash
 
+      - map_name: stats_map_dl_harq
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: stats_map_dl_harq
+      - map_name: dl_harq_hash
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: dl_harq_hash
+
+      - map_name: stats_map_ul_harq
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: stats_map_ul_harq
+      - map_name: ul_harq_hash
+        linked_codelet_name: mac_stats_collect_harq
+        linked_map_name: ul_harq_hash

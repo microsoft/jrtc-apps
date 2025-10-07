@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BASE_IMAGE_TAG=latest
-IMAGE_TAG=latest
+IMAGE_TAG=srsran25.04-latest
 CACHE_FLAG=
 
 Usage()
@@ -10,7 +10,7 @@ Usage()
    echo "Build srsRan image"
    echo "options:"
    echo "[-b]    Optional base image tag.  Default='latest'"
-   echo "[-s]    Optional image tag.  Default='latest'"
+   echo "[-s]    Optional image tag.  Default='srsran25.04-latest'"
    echo "[-c]    Optional.  If included, '--no-cache- is added to the Docker build"
    echo
 }

@@ -90,8 +90,8 @@ uint64_t jbpf_main(void* state)
     // update window_info
     const jbpf_queue_info_t* queue_info = &pdcp_ctx.window_info;
     if (queue_info->used) {
-        PDCP_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_pkts, queue_info->num_pkts);
-        PDCP_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_bytes, queue_info->num_bytes);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_pkts, queue_info->num_pkts);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_bytes, queue_info->num_bytes);
         out->stats[ind % MAX_NUM_UE_RB].has_pdu_window_pkts = true;
         out->stats[ind % MAX_NUM_UE_RB].has_pdu_window_bytes = true;
     }

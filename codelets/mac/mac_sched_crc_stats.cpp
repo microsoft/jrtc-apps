@@ -6,6 +6,7 @@
 #include "jbpf_srsran_contexts.h"
 #include "srsran/scheduler/scheduler_feedback_handler.h"
 
+#include "mac_helpers.h"
 #include "mac_sched_crc_stats.pb.h"
 
 #include "../utils/misc_utils.h"
@@ -17,21 +18,13 @@
 #include "jbpf_helper.h"
 #include "jbpf_helper_utils.h"
 
-#define MAX_NUM_UE (32)
+
 
 struct jbpf_load_map_def SEC("maps") crc_not_empty = {
     .type = JBPF_MAP_TYPE_ARRAY,
     .key_size = sizeof(int),
     .value_size = sizeof(uint32_t),
     .max_entries = 1,
-};
-
-// Consecutive packet losses
-struct jbpf_load_map_def SEC("maps") cnt_loss = {
-    .type = JBPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(uint64_t),
-    .value_size = sizeof(uint32_t),
-    .max_entries = MAX_NUM_UE,
 };
 
 // We store stats in this (single entry) map across runs
@@ -47,6 +40,7 @@ DEFINE_PROTOHASH_32(crc_hash, MAX_NUM_UE);
 
 
 
+//#define MAX_NUM_RETX_HIST 16
 
 
 //#define DEBUG_PRINT
@@ -73,56 +67,72 @@ uint64_t jbpf_main(void* state)
     if (!out)
         return JBPF_CODELET_FAILURE;
 
-    int new_val = 0;
+    bool processed = (bool) (ctx->srs_meta_data1 >> 32);        
+    uint16_t nof_retxs = (uint16_t) (ctx->srs_meta_data1 >> 16) & 0xffff;
+    uint16_t max_nof_retxs = (uint16_t) (ctx->srs_meta_data1 & 0xffff);
 
+    if (!processed) {
+        return JBPF_CODELET_SUCCESS;
+    }
+
+    int new_val = 0;
 
     // Increase loss count
     uint32_t ind = JBPF_PROTOHASH_LOOKUP_ELEM_32(out, stats, crc_hash, ctx->du_ue_index, new_val);
-    //if (ind >= MAX_NUM_UE) return JBPF_CODELET_FAILURE;
+
+    uint16_t MAX_NUM_RETX_HIST = (sizeof(out->stats[ind % MAX_NUM_UE].retx_hist) / sizeof(out->stats[ind % MAX_NUM_UE].retx_hist[0]));
+
     if (new_val) {
-        out->stats[ind % MAX_NUM_UE].cons_min = UINT32_MAX;
         out->stats[ind % MAX_NUM_UE].cons_max = 0;
         out->stats[ind % MAX_NUM_UE].succ_tx = 0;
         out->stats[ind % MAX_NUM_UE].cnt_tx = 0;
-        out->stats[ind % MAX_NUM_UE].min_sinr = UINT32_MAX;
-        out->stats[ind % MAX_NUM_UE].min_rsrp = UINT32_MAX;
-        out->stats[ind % MAX_NUM_UE].max_sinr = 0;
-        out->stats[ind % MAX_NUM_UE].max_rsrp = INT32_MIN;
+        for (int i = 0; i < MAX_NUM_RETX_HIST; ++i) {
+            out->stats[ind % MAX_NUM_UE].retx_hist[i] = 0;
+        }
+        out->stats[ind % MAX_NUM_UE].harq_failure = 0;
+
+        // Initialise to int16 limits as original SINR is an int16
+        out->stats[ind % MAX_NUM_UE].min_sinr = INT16_MAX;
+        out->stats[ind % MAX_NUM_UE].max_sinr = INT16_MIN;
         out->stats[ind % MAX_NUM_UE].sum_sinr = 0;
-        out->stats[ind % MAX_NUM_UE].sum_rsrp = 0;
         out->stats[ind % MAX_NUM_UE].cnt_sinr = 0;
+
+        out->stats[ind % MAX_NUM_UE].min_rsrp = UINT32_MAX;
+        out->stats[ind % MAX_NUM_UE].max_rsrp = 0;
+        out->stats[ind % MAX_NUM_UE].sum_rsrp = 0;
         out->stats[ind % MAX_NUM_UE].cnt_rsrp = 0;
     }
+
 
 
     //////////////// Loss stats
 
     out->stats[ind % MAX_NUM_UE].cnt_tx++;
 
-    uint64_t key = ((uint64_t)mac_ctx.harq_id << 31) << 1 | (uint64_t)ctx->du_ue_index;
-    uint32_t *loss_cnt = (uint32_t *)JBPF_HASHMAP_LOOKUP_UPDATE_UINT32_ELEM(&cnt_loss, &key, 0);
+    auto retx_hist_idx = (nof_retxs > MAX_NUM_RETX_HIST) ? (MAX_NUM_RETX_HIST) : nof_retxs;
+    out->stats[ind % MAX_NUM_UE].retx_hist[retx_hist_idx % MAX_NUM_RETX_HIST]++;
 
     if (mac_ctx.tb_crc_success)
     {
         out->stats[ind % MAX_NUM_UE].succ_tx++;
 
-        // Increase min and max
-        if (out->stats[ind].cons_min > (uint32_t)(*loss_cnt)) {
-            out->stats[ind].cons_min = (uint32_t)(*loss_cnt);
-        }
-        if (out->stats[ind].cons_max < (uint32_t)(*loss_cnt)) {
-            out->stats[ind].cons_max = (uint32_t)(*loss_cnt);
-        }
+    } else {
+
+        // Increase max "consecutive loss" count
+        if (out->stats[ind].cons_max < (uint32_t)(nof_retxs)) {
+            out->stats[ind].cons_max = (uint32_t)(nof_retxs);
 #ifdef DEBUG_PRINT
-        jbpf_printf_debug("Min/max: ue=%d min=%d max=%d\n",
+        jbpf_printf_debug("Min/max: ue=%d max=%d\n",
             ctx->du_ue_index, 
-            out->stats[ind].cons_min, 
             out->stats[ind].cons_max);
 #endif
-        *loss_cnt = 0;
-    } else {
-        // Increase loss count
-        (*loss_cnt)++;
+        }
+
+        // if not ack and h.nof_retxs >= h.max_nof_harq_retxs
+        if (nof_retxs >= max_nof_retxs) {
+            // Handle max HARQ retransmissions reached
+             out->stats[ind].harq_failure++;
+        }
     }
 
 
@@ -132,14 +142,12 @@ uint64_t jbpf_main(void* state)
     //////////////// RSRP/RSRQ stats
 
 
-    // out->timestamp = jbpf_time_get_ns();
-    // out->ue_index = ctx->du_ue_index;
-    // out->harq_id = mac_ctx.harq_id;
-    // out->tb_crc_success = mac_ctx.tb_crc_success;
-
     if (mac_ctx.ul_sinr_dB.has_value()) {
+
+        // valid range of ul_sinr_dB is [-65.534, 65.534]
+
         // We ignore decimal part of SINR
-        uint32_t ul_sinr_dB = (uint32_t) fixedpt_toint(float_to_fixed(mac_ctx.ul_sinr_dB.value()));
+        int32_t ul_sinr_dB = (int32_t)fixedpt_toint(float_to_fixed(mac_ctx.ul_sinr_dB.value()));
         if (ul_sinr_dB < out->stats[ind].min_sinr) {
             out->stats[ind].min_sinr = ul_sinr_dB;
         }
@@ -163,6 +171,9 @@ uint64_t jbpf_main(void* state)
     } 
 
     if (mac_ctx.ul_rsrp_dBFS.has_value()) {
+
+        // valid range of ul_rsrp_dBFS is [-128.0, 6425.4]
+
         // We ignore decimal part of RSRP
         int32_t ul_rsrp_dB = (int32_t) fixedpt_toint(float_to_fixed(mac_ctx.ul_rsrp_dBFS.value()));
 

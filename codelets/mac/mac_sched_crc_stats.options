@@ -1,1 +1,2 @@
 crc_stats.stats max_count:32
+t_crc_stats.retx_hist max_count:16, fixed_count:true

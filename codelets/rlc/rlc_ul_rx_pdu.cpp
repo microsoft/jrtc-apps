@@ -10,6 +10,7 @@
 
 #include "../utils/misc_utils.h"
 #include "../utils/hashmap_utils.h"
+#include "../utils/stats_utils.h"
 
 
 #define SEC(NAME) __attribute__((section(NAME), used))
@@ -90,19 +91,19 @@ uint64_t jbpf_main(void* state)
     /////////////////////////////////////////////
     // pdu_bytes
     if (pdu_type == JBPF_RLC_PDUTYPE_DATA) {
-        RLC_TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_bytes, pdu_len);
+        TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_bytes, pdu_len);
     }
 
     /////////////////////////////////////////////
     // UM
     if (out->stats[ind % MAX_NUM_UE_RB].has_um) {
-        RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].um.pdu_window_pkts, rlc_ctx.u.um_rx.window_num_pkts);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].um.pdu_window_pkts, rlc_ctx.u.um_rx.window_num_pkts);
     }	
 	
     /////////////////////////////////////////////
     // AM
     if (out->stats[ind % MAX_NUM_UE_RB].has_am) {
-        RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_pkts, rlc_ctx.u.am_rx.window_num_pkts);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_pkts, rlc_ctx.u.am_rx.window_num_pkts);
     }	
     
     *not_empty_stats = 1;

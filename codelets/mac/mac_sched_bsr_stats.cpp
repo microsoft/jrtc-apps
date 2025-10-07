@@ -6,6 +6,7 @@
 #include "jbpf_srsran_contexts.h"
 #include "srsran/scheduler/scheduler_feedback_handler.h"
 
+#include "mac_helpers.h"
 #include "mac_sched_bsr_stats.pb.h"
 
 #include "../utils/misc_utils.h"
@@ -14,8 +15,6 @@
 
 #include "jbpf_defs.h"
 #include "jbpf_helper.h"
-
-#define MAX_NUM_UE (32)
 
 
 struct jbpf_load_map_def SEC("maps") bsr_not_empty = {
@@ -69,10 +68,35 @@ uint64_t jbpf_main(void* state)
         out->stats[ind % MAX_NUM_UE].bytes = 0;
     }
     out->stats[ind % MAX_NUM_UE].cnt++;
-    for (const auto& lcg_report : mac_ctx.reported_lcgs) {
-        out->stats[ind % MAX_NUM_UE].bytes += lcg_report.nof_bytes;
+
+    // Accumulate bytes from reported LCGs without range-for (verifier-friendly).
+    // NOTE: size() and data() are constexpr/inlined for static_vector and compile to plain field reads.
+    size_t n = mac_ctx.reported_lcgs.size();
+    if (n > srsran::MAX_NOF_LCGS) {
+        // Defensive: cap to capacity so the verifier has a hard upper bound.
+        n = srsran::MAX_NOF_LCGS;
     }
-  
+
+    // Get a raw pointer to the underlying array.
+    const srsran::ul_bsr_lcg_report* base = mac_ctx.reported_lcgs.data();
+
+    // Loop with a constant upper bound that the verifier can unroll.
+    #pragma clang loop unroll(full)
+    for (size_t i = 0; i < srsran::MAX_NOF_LCGS; ++i) {
+        if (i >= n) {
+            break;
+        }
+
+        const srsran::ul_bsr_lcg_report* rep = &base[i];
+
+        // Per-element bounds check against ctx->data_end to keep the verifier happy.
+        if ((const uint8_t*)rep + sizeof(*rep) > (const uint8_t*)ctx->data_end) {
+            return JBPF_CODELET_FAILURE;
+        }
+
+        out->stats[ind % MAX_NUM_UE].bytes += rep->nof_bytes;
+    }
+
     *not_empty_stats = 1;
 
     return JBPF_CODELET_SUCCESS;

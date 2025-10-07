@@ -3,10 +3,11 @@
 # Declare variables to be passed into your templates.
 
 image:
-  srs_jbpf: ghcr.io/microsoft/jrtc-apps/srs-jbpf:latest
-  srs_jbpf_proxy: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:latest
+  srs_jbpf: ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.04-latest
+  srs_jbpf_proxy: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.04-latest
   pullPolicy: Always
 
+HOSTNAME: ""
 
 nodeSelector:
   hostname: k8s-worker6
@@ -170,9 +171,10 @@ jrtc_controller:
     log_analytics:
       enabled: false
 
-  app_json_input:
-    enabled: true
-    port: 30502
+udp_forwarder:
+  enabled: true
+  port: 30502
+ 
 
 
 # RANBooster configurations
