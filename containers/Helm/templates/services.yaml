@@ -1,0 +1,256 @@
+{{- $V := .Values -}}
+{{- $R := .Release -}}
+{{- $baseProxy := (default 30450 $V.jbpf.port) -}}
+{{- $baseUDP   := (default 30502 $V.udp_forwarder.port) -}}
+{{- $ran_cnt := 0 | int -}}
+
+{{- range $ran_name, $_ := $V.duConfigs }}
+
+{{- if $V.splitDeployment }}
+
+# Headless services for stable pod DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-cu-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-cu-{{ $ran_name }} }
+spec:
+  clusterIP: None
+  selector: { app: srs-cu-{{ $ran_name }} }
+  ports: [ { name: dummy, port: 12345, targetPort: 12345 } ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-du-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-du-{{ $ran_name }} }
+spec:
+  clusterIP: None
+  selector: { app: srs-du-{{ $ran_name }} }
+  ports: [ { name: dummy, port: 12345, targetPort: 12345 } ]
+
+# ---------- CU JRTC & UDP ----------
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-service-cu-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-cu-{{ $ran_name }} }
+spec:
+  type: NodePort
+  selector: { app: srs-cu-{{ $ran_name }} }
+  ports:
+    - name: http
+      protocol: TCP
+      port: 3001
+      targetPort: 3001
+      nodePort: {{ default 30500 $V.services.jrtc.cuNodePort }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-udp-input-cu-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-cu-{{ $ran_name }} }
+spec:
+  type: ClusterIP
+  selector: { app: srs-cu-{{ $ran_name }} }
+  ports:
+    - name: udp
+      protocol: UDP
+      port: {{ add $baseUDP $ran_cnt }}
+      targetPort: {{ add $baseUDP $ran_cnt }}
+
+# ---------- DU JRTC & UDP (separate from CU) ----------
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-service-du-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-du-{{ $ran_name }} }
+spec:
+  # Keep DU JRTC internal by default; switch to NodePort via values if needed
+  type: {{ default "ClusterIP" $V.services.jrtc.du.type }}
+  selector: { app: srs-du-{{ $ran_name }} }
+  ports:
+    - name: http
+      protocol: TCP
+      port: 3001
+      targetPort: 3001
+      {{- if eq (default "ClusterIP" $V.services.jrtc.du.type) "NodePort" }}
+      nodePort: {{ default 30510 $V.services.jrtc.du.nodePort }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-udp-input-du-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-du-{{ $ran_name }} }
+spec:
+  type: ClusterIP
+  selector: { app: srs-du-{{ $ran_name }} }
+  ports:
+    - name: udp
+      protocol: UDP
+      port: {{ add $baseUDP $ran_cnt }}
+      targetPort: {{ add $baseUDP $ran_cnt }}
+
+# ---------- Proxy services (unchanged) ----------
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-cu-{{ $ran_name }}-proxy
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-cu-{{ $ran_name }} }
+spec:
+  type: {{ default "ClusterIP" $V.services.proxy.cu.type }}
+  selector: { app: srs-cu-{{ $ran_name }} }
+  ports:
+    - name: proxy
+      protocol: TCP
+      port: {{ add $baseProxy $ran_cnt }}
+      targetPort: {{ add $baseProxy $ran_cnt }}
+      {{- if eq (default "ClusterIP" $V.services.proxy.cu.type) "NodePort" }}
+      nodePort: {{ default 30511 $V.services.proxy.cu.nodePort }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-du-{{ $ran_name }}-proxy
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-du-{{ $ran_name }} }
+spec:
+  type: {{ default "NodePort" $V.services.proxy.du.type }}
+  selector: { app: srs-du-{{ $ran_name }} }
+  ports:
+    - name: proxy
+      protocol: TCP
+      port: {{ add $baseProxy $ran_cnt }}
+      targetPort: {{ add $baseProxy $ran_cnt }}
+      {{- if eq (default "NodePort" $V.services.proxy.du.type) "NodePort" }}
+      nodePort: {{ default 30501 $V.services.proxy.du.nodePort }}
+      {{- end }}
+
+# ---------- UDP forwarder (CU & DU) ----------
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-cu-{{ $ran_name }}-udpforwarder
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-cu-{{ $ran_name }} }
+spec:
+  type: {{ default "ClusterIP" $V.services.udpforwarder.cu.type }}
+  selector: { app: srs-cu-{{ $ran_name }} }
+  ports:
+    - name: udpforwarder
+      protocol: UDP
+      port: {{ add $baseUDP $ran_cnt }}
+      targetPort: {{ add $baseUDP $ran_cnt }}
+      {{- if eq (default "ClusterIP" $V.services.udpforwarder.cu.type) "NodePort" }}
+      nodePort: {{ default 30512 $V.services.udpforwarder.cu.nodePort }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-du-{{ $ran_name }}-udpforwarder
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-du-{{ $ran_name }} }
+spec:
+  type: {{ default "NodePort" $V.services.udpforwarder.du.type }}
+  selector: { app: srs-du-{{ $ran_name }} }
+  ports:
+    - name: udpforwarder
+      protocol: UDP
+      port: {{ add $baseUDP $ran_cnt }}
+      targetPort: {{ add $baseUDP $ran_cnt }}
+      {{- if eq (default "NodePort" $V.services.udpforwarder.du.type) "NodePort" }}
+      nodePort: {{ default 30502 $V.services.udpforwarder.du.nodePort }}
+      {{- end }}
+
+{{- else }}
+
+# Monolithic mode (unchanged)
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-stack-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-stack-{{ $ran_name }} }
+spec:
+  clusterIP: None
+  selector: { app: srs-stack-{{ $ran_name }} }
+  ports: [ { name: dummy, port: 12345, targetPort: 12345 } ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-service-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-stack-{{ $ran_name }} }
+spec:
+  type: NodePort
+  selector: { app: srs-stack-{{ $ran_name }} }
+  ports:
+    - { name: http, protocol: TCP, port: 3001, targetPort: 3001, nodePort: {{ default 30500 $V.services.jrtc.cuNodePort }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-udp-input-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-stack-{{ $ran_name }} }
+spec:
+  type: ClusterIP
+  selector: { app: srs-stack-{{ $ran_name }} }
+  ports:
+    - { name: udp, protocol: UDP, port: {{ add $baseUDP $ran_cnt }}, targetPort: {{ add $baseUDP $ran_cnt }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-{{ $ran_name }}-proxy
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-stack-{{ $ran_name }} }
+spec:
+  type: {{ default "NodePort" $V.services.proxy.du.type }}
+  selector: { app: srs-stack-{{ $ran_name }} }
+  ports:
+    - name: proxy
+      protocol: TCP
+      port: {{ add $baseProxy $ran_cnt }}
+      targetPort: {{ add $baseProxy $ran_cnt }}
+      {{- if eq (default "NodePort" $V.services.proxy.du.type) "NodePort" }}
+      nodePort: {{ default 30501 $V.services.proxy.du.nodePort }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-{{ $ran_name }}-udpforwarder
+  namespace: {{ $R.Namespace }}
+  labels: { app: srs-stack-{{ $ran_name }} }
+spec:
+  type: {{ default "NodePort" $V.services.udpforwarder.du.type }}
+  selector: { app: srs-stack-{{ $ran_name }} }
+  ports:
+    - name: udpforwarder
+      protocol: UDP
+      port: {{ add $baseUDP $ran_cnt }}
+      targetPort: {{ add $baseUDP $ran_cnt }}
+      {{- if eq (default "NodePort" $V.services.udpforwarder.du.type) "NodePort" }}
+      nodePort: {{ default 30502 $V.services.udpforwarder.du.nodePort }}
+      {{- end }}
+
+{{- end }}
+
+{{- $ran_cnt = add1 $ran_cnt -}}
+{{- end }}

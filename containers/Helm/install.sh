@@ -29,6 +29,7 @@ Help()
    echo "-h     (Optional) Install Helm from a local path given here, instead of Github"
    echo "-b     (Optional) Local path with compiled jbpf codelets (current path is the default)"
    echo "-d     (Optional) Debug mode that doesn't start binaries"
+   echo "-r     (Optional) Dry run mode that generates the YAML file"
    echo
 }
 
@@ -36,23 +37,29 @@ VALUES_FILES=
 VERSION=$CHART_VERSION
 LOCAL_PATH=
 DEBUG=
-
-while getopts "n:f:v:h:db" option; do
+DRY_RUN=
+# add dry run option
+while getopts "f:v:h:b:dr?" option; do
     case $option in
         f) # Add extra config file
-            VALUES_FILES="$VALUES_FILES $OPTARG";;
+        VALUES_FILES="$VALUES_FILES $OPTARG";;
         v) # Set chart version
-            VERSION="$OPTARG";;
+        VERSION="$OPTARG";;
         h) # Set local chart path
-            LOCAL_PATH="$OPTARG";;
-        b) # Set local chart path
-            JBPF_CODELETS="$OPTARG";;
+        LOCAL_PATH="$OPTARG";;
+        b) # Set local codelets path
+        JBPF_CODELETS="$OPTARG";;
         d) # Enable debug
-            DEBUG="DEBUG";;
-        \?) # Invalid option
-            echo "Invalid option"
-            Help
-            exit;;
+        DEBUG="DEBUG";;
+        r) # Enable dry run
+        DRY_RUN="DRY_RUN";;
+        \?) # Show help (-?) or invalid option routed here when '?' included above
+        Help
+        exit 0;;
+        *) # Any other invalid option
+        echo "Invalid option"
+        Help
+        exit 1;;
     esac
 done
 
@@ -128,7 +135,13 @@ SRSRAN_IMAGES="\
 
 
 kubectl create namespace ran || true
-
+# if dry run, generate the yaml file and exit
+if [ ! -z "$DRY_RUN" ]; then
+    echo "Dry run mode: Generating YAML file only"
+    helm template \
+        $EXTRA_VALUES $DEBUG_OPTIONS $JBPF_OPTIONS $LA_OPTIONS $JRTC_OPTIONS $SRSRAN_IMAGES -n ran ran $HELM_URL > test_deploy.yaml
+    exit 0
+fi
 
 helm install \
     $EXTRA_VALUES $DEBUG_OPTIONS $JBPF_OPTIONS $LA_OPTIONS $JRTC_OPTIONS $SRSRAN_IMAGES -n ran ran $HELM_URL

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jrtc-config
+  namespace: {{ $.Release.Namespace }}
+data:
+  config: |-
+    jbpf_io_config:
+      jbpf_namespace: {{ $.Values.jbpf.cfg.jbpf_namespace }}
+      jbpf_path: {{ $.Values.jbpf.cfg.jbpf_run_path }}
+    jrtc_router_config:
+      ipc_name: {{ $.Values.jbpf.cfg.jbpf_ipc_mem_name }}
+    logging:
+      jrtc_level: {{ $.Values.jrtc_controller.logging.jrtc_level }}
+      jbpf_level: {{ $.Values.jrtc_controller.logging.jbpf_level }}
