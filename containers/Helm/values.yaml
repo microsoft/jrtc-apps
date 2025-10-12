@@ -2,17 +2,23 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+splitDeployment: false
+
 image:
   srs_jbpf: ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.04-latest
   srs_jbpf_proxy: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.04-latest
   pullPolicy: Always
 
+
 HOSTNAME: ""
 
 nodeSelector:
-  hostname: k8s-worker6
+  hostname: k8s-worker6        # used by monolithic or as default
+  cuHostname: ""               # if set (non-empty) and split=true -> CU pod scheduled here
+  duHostname: ""               # if set (non-empty) and split=true -> DU pod scheduled here
 
 resources:
+  
   gnb:
     limits:
       cpu: 5
@@ -102,7 +108,10 @@ system:
 
 
 # These will be assigned by K8s CNI
+
+
 sriov:
+  enabled: false 
   cniVersion: 0.3.1 #<< cniVersion >>
   cucp_ip: 192.168.101.205 #<< CUCP pod IP SRIOV_CUCP >>
   cucp_prefix: 24 #<< Prefix Value >>
@@ -129,7 +138,7 @@ troubleshooter:
 
 jbpf:
   # Currently, codelets can only be loaded from a local directory
-  codelets_vol_mount: ""
+  codelets_vol_mount: /home/netsys/jrtc-apps-c5g/codelets
   port: 30450
   cfg:  # the following is passed directly to srsRAN as it's Jbpf config
     jbpf_run_path: "/tmp"
@@ -174,8 +183,6 @@ jrtc_controller:
 udp_forwarder:
   enabled: true
   port: 30502
- 
-
 
 # RANBooster configurations
 das:
@@ -247,7 +254,7 @@ dmimo:
 # If enabled, the chart doesn't start executables in the containers, 
 # so a user can exec into them and start them manually
 debug_mode:
-  enabled: false
+  enabled: true
 
 
 # The following are directly copied into srsRAN config
@@ -260,3 +267,16 @@ log:
 
 # Also metrics, pcap
 
+services:
+  jrtc:
+    cuNodePort: 30500
+    du:
+      enabled: false      # set true to expose DU jrtc
+      type: ClusterIP     # or NodePort
+      nodePort: 30510     # only used if type=NodePort
+  proxy:
+    cu: { type: ClusterIP, nodePort: 30511 }
+    du: { type: NodePort,  nodePort: 30501 }
+  udpforwarder:
+    cu: { type: ClusterIP, nodePort: 30512 }
+    du: { type: NodePort,  nodePort: 30502 }

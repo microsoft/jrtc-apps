@@ -1,334 +1,822 @@
-{{ $ran_cnt := 0 | int }}
+{{/* Helpers */}}
+{{- define "selectNode" -}}
+{{- $vals := .vals -}}
+{{- $role := .role -}}
+{{- if and $vals.splitDeployment (eq $role "cu") ($vals.nodeSelector.cuHostname) -}}
+kubernetes.io/hostname: {{ $vals.nodeSelector.cuHostname }}
+{{- else if and $vals.splitDeployment (eq $role "du") ($vals.nodeSelector.duHostname) -}}
+kubernetes.io/hostname: {{ $vals.nodeSelector.duHostname }}
+{{- else -}}
+kubernetes.io/hostname: {{ $vals.nodeSelector.hostname }}
+{{- end -}}
+{{- end -}}
 
-{{- range $ran_name, $values := .Values.duConfigs }}
+{{- $V := .Values -}}
+{{- $R := .Release -}}
+{{- $baseProxy := (default 30450 $V.jbpf.port) -}}
+{{- $baseUDP   := (default 30502 $V.udp_forwarder.port) -}}
+{{- $jbpfPath  := (default "/var/run/jbpf/ipc" $V.jbpf.cfg.jbpf_run_path) -}}
+{{- $jbpfNS    := (default "jbpf" $V.jbpf.cfg.jbpf_namespace) -}}
+{{- $lcmName   := (default "jbpf_lcm_ipc" $V.jbpf.cfg.jbpf_lcm_ipc_name) -}}
+{{- $ran_cnt := 0 | int -}}
 
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: srs-gnb-cm-{{ $ran_name }}
+{{- range $ran_name, $du := $V.duConfigs }}
 
-data:
-  config.json: |-
-      {{ $.Values | toJson }}
+{{- if not $V.splitDeployment }}
 
----
+########################################
+# Monolithic (stacked) CU+DU StatefulSet
+########################################
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: srs-gnb-{{ $ran_name }}
+  name: srs-stack-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
   labels:
-    app: srs-gnb-{{ $ran_name }}
-    {{- include "ran-5g.labels" $ | nindent 4 }}
+    app: srs-stack-{{ $ran_name }}
 spec:
-  serviceName: srs-service-gnb-{{ $ran_name }}
+  serviceName: srs-stack-{{ $ran_name }}
   selector:
     matchLabels:
-      app: srs-gnb-{{ $ran_name }}
-      {{- include "ran-5g.selectorLabels" $ | nindent 6 }}
+      app: srs-stack-{{ $ran_name }}
   template:
     metadata:
       labels:
-        app: srs-gnb-{{ $ran_name }}
-        {{- include "ran-5g.selectorLabels" $ | nindent 8 }}
+        app: srs-stack-{{ $ran_name }}
+      {{- if $V.sriov.enabled }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: '[
-              {
-                "name": "srs-sriov-cu"
-              }
-              {{- range $idx_c, $cell := $values.cells }}
-              ,{
-                "name": "srs-{{ $ran_name }}-sriov-fh-instance-{{ $idx_c }}"
-              }
-              {{- end }}
-            ]'
-
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            { "name": "srs-sriov-cu" }
+            {{- range $idx_c, $cell := $du.cells }}
+            ,{ "name": "srs-{{ $ran_name }}-sriov-fh-instance-{{ $idx_c }}" }
+            {{- end }}
+          ]
+      {{- end }}
     spec:
-      securityContext:
-        runAsUser: 0
-        runAsGroup: 0
       serviceAccountName: srs-service-account
+      automountServiceAccountToken: true
       nodeSelector:
-        kubernetes.io/hostname: {{ $.Values.nodeSelector.hostname }}
+        {{- include "selectNode" (dict "vals" $V "role" "du") | nindent 8 }}
       terminationGracePeriodSeconds: 0
+      {{- if $V.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $V.image.pullSecret }}
+      {{- end }}
       volumes:
-      - name: dshm
-        hostPath:
-          path: /dev/shm
-      - name: hugepage
-        hostPath:
-          path: /dev/hugepages
-      - name: sys
-        hostPath:
-          path: /sys
-      - name: dev
-        hostPath:
-          path: /dev
-      - name: varjbpf
-        hostPath:
-          path: {{ printf "%s/%s" $.Values.jbpf.cfg.jbpf_run_path $.Values.jbpf.cfg.jbpf_namespace }}
-      - name: codelets
-        hostPath:
-          path: {{ $.Values.jbpf.codelets_vol_mount }}
-      - name: du-config-volume
-        configMap:
-          name: srs-gnb-cm-{{ $ran_name }}
-
-
-      {{- if (or (or $.Values.vlan_isolation.enabled (eq (int $.Values.jbpf.cfg.jbpf_enable_ipc) 1))  (and (not $.Values.debug_mode.enabled) $.Values.das.enabled) ) }}
-      initContainers:
-      
-      {{- if (and (not $.Values.debug_mode.enabled) $.Values.das.enabled) }}
-      # Init container to wait for RANBooster to start
-      - name: wait-for-das
-        image: {{ $.Values.troubleshooter.image }}
-        command:
-          - /bin/sh
-          - -c
-          - |
-              POD_NAME="srs-das-middlebox-{{ $.Values.das.dasboxes.das1.middlebox.dasName }}-0"
-              echo "*** Das Middlebox: ${POD_NAME}"             
-              while ! curl -s -k -X GET -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
-                -H "Content-Type: application/json" \
-                "https://kubernetes.default.svc/api/v1/namespaces/ran/pods/$POD_NAME/log" | \
-                grep -q 'Single core used, so running one thread'; do
-                  echo "*** Waiting for DAS middlebox to start..."
-                  sleep 2
-              done
-              echo "*** Das middlebox is ready"
-      {{- end }}
-
-      {{- if (and (not $.Values.debug_mode.enabled) (eq (int $.Values.jbpf.cfg.jbpf_enable_ipc) 1)) }}
-      - name: wait-for-jrtc
-        image: {{ $.Values.troubleshooter.image }}
-        env:
-          - name: NODE_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.hostIP
-        command:
-        - "/bin/bash"
-        - "-c"
-        - "until nc -z jrtc-service.ran.svc.cluster.local 3001 > /dev/null; do
-          echo Waiting for jrtc-service.ran.svc.cluster.local:3001;
-          sleep 2;
-          done;"
-      {{- end }}
-
-      {{- if $.Values.vlan_isolation.enabled }}
-      {{range $idx_c, $cell := $values.cells}}
-      # Init container to set VLANs for RUs using a custom API
-      - name: initvlan-{{ $idx_c }}
-        image: {{ $.Values.troubleshooter.image }}
-        env:
-        - name: MY_NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        command:
-        - "/bin/bash"
-        - "-c"
-        - >
-          echo 'Waiting for VLANs to be set...' &&
-          curl -s --show-error -f -X PUT "http://{{ $.Values.vlan_isolation.url }}/tor_switch/assign_servers_to_ru?servers=$(MY_NODE_NAME)&ru={{ $cell.ruNAME }}" &&
-          echo 'All VLANs set, continuing'
-      {{end}}
-      {{- end }}
-
-      {{- end }}
+        - name: dshm
+          hostPath: { path: /dev/shm }
+        - name: hugepage
+          hostPath: { path: /dev/hugepages }
+        - name: sys
+          hostPath: { path: /sys }
+        - name: dev
+          hostPath: { path: /dev }
+        - name: varjbpf
+          hostPath:
+            path: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+        {{- if $V.jbpf.codelets_vol_mount }}
+        - name: codelets
+          hostPath:
+            path: {{ $V.jbpf.codelets_vol_mount | quote }}
+        {{- end }}
+        - name: du-config-volume
+          configMap:
+            name: srs-gnb-cm-{{ $ran_name }}
+        - name: jrtc-config
+          configMap:
+            name: jrtc-config
 
       containers:
-
-      {{- if  $.Values.troubleshooter.enabled }}
-      - name: troubleshooter
-        image: {{ $.Values.troubleshooter.image }}
-        command: [ "/bin/bash", "-c", "--" ]
-        args: [ "while true; do sleep 30; done;" ]
-      {{- end }}
-
-      {{- if eq (int $.Values.jbpf.cfg.jbpf_enable_ipc) 1 }}
-      {{- if $.Values.udp_forwarder.enabled }}
-      - name: udpforwarder
-        image: {{ $.Values.image.srs_jbpf }}
-        imagePullPolicy: {{ $.Values.image.pullPolicy }}
-        env:
-          - name: LISTEN_IP
-            value: "{{ $.Values.sriov.cucp_ip }}"
-          - name: LISTEN_PORT
-            value: "{{ add $.Values.udp_forwarder.port $ran_cnt }}"
-          - name: FORWARD_IP
-            value: "jrtc-udp-input.{{ $.Release.Namespace }}.svc.cluster.local"
-          - name: FORWARD_PORT
-            value: "{{ $.Values.udp_forwarder.port }}"
-        command: ["/udp_forwarder/udp_forwarder.sh"]
-      {{- end }}
-      {{- end }}
-
-      - name: gnb
-        image: "{{ $.Values.image.srs_jbpf }}"
-        imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
-        volumeMounts:
-        - name: dshm
-          mountPath: /dev/shm
-        - name: hugepage
-          mountPath: /dev/hugepages
-        - name: sys
-          mountPath: /sys/
-        - name: dev
-          mountPath: /dev/
-        - name: varjbpf
-          mountPath: {{ printf "%s/%s" $.Values.jbpf.cfg.jbpf_run_path $.Values.jbpf.cfg.jbpf_namespace }}
-        - name: codelets
-          mountPath: /codelets
-        - name: du-config-volume
-          mountPath: /du-config
-          readOnly: true
-
-        command: ["/bin/sh", "-c"]
-        {{- if  $.Values.debug_mode.enabled }}
-        args: [ "sleep 99999999d" ]
-        {{- else }}
-        args: [ "/opt/Scripts/run.sh" ]
+        {{- if $V.troubleshooter.enabled }}
+        - name: troubleshooter
+          image: {{ $V.troubleshooter.image }}
+          command: ["/bin/sh","-c","--"]
+          args: ["while true; do sleep 30; done;"]
         {{- end }}
-        env:
-          - name: DEBUG_MODE
-            value: "{{ $.Values.debug_mode.enabled }}"
-          - name: JBPF_CODELETS
-            value: "/codelets"
-        securityContext:
-          privileged: true
-          capabilities:
-            add:
-            - SYS_ADMIN
-            - IPC_LOCK
-            - SYS_NICE
-        tty: true
-        stdin: true
 
+        {{- if $V.udp_forwarder.enabled }}
+        - name: udpforwarder
+          image: {{ $V.image.srs_jbpf }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          env:
+            {{- if $V.sriov.enabled }}
+            - name: LISTEN_IP
+              value: {{ $V.sriov.cucp_ip | quote }}
+            {{- else }}
+            - name: LISTEN_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- end }}
+            - name: LISTEN_PORT
+              value: {{ (add $baseUDP $ran_cnt) | quote }}
+            - name: FORWARD_IP
+              value: jrtc-udp-input-{{ $ran_name }}.{{ $R.Namespace }}.svc.cluster.local
+            - name: FORWARD_PORT
+              value: {{ $baseUDP | quote }}
+          command: ["/bin/sh","-c"]
+          args: [{{ if $V.debug_mode.enabled }}"sleep 99999999d"{{ else }}"/udp_forwarder/udp_forwarder.sh"{{ end }}]
+        {{- end }}
 
-        resources:
-          limits:
-            cpu: {{ $.Values.resources.gnb.limits.cpu }}
-            memory: {{ $.Values.resources.gnb.limits.memory }}
-            hugepages-1Gi: {{ $.Values.resources.gnb.limits.hugepages1Gi }}
-            {{ $.Values.sriov.resourceName }}: 1
+        # Role container (monolithic keeps 'du' name)
+        - name: du
+          image: {{ $V.image.srs_jbpf }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev/
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+            - name: du-config-volume
+              mountPath: /du-config
+              readOnly: true
+          command: ["/bin/sh","-c"]
+          args: [{{ if $V.debug_mode.enabled }}"sleep 99999999d"{{ else }}"/opt/Scripts/run.sh"{{ end }}]
+          env:
+            - name: ROLE
+              value: "DU"
+            - name: DEBUG_MODE
+              value: {{ $V.debug_mode.enabled | quote }}
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              cpu: {{ $V.resources.gnb.limits.cpu }}
+              memory: {{ $V.resources.gnb.limits.memory }}
+              hugepages-1Gi: {{ $V.resources.gnb.limits.hugepages1Gi }}
+              {{- if $V.sriov.enabled }}
+              {{- if $V.sriov.resourceName }}
+              {{ $V.sriov.resourceName }}: 1
+              {{- end }}
+              {{- range $cell := $du.cells }}
+              {{ $cell.ruDPDKResource }}: 1
+              {{- end }}
+              {{- end }}
+            requests:
+              cpu: {{ $V.resources.gnb.requests.cpu }}
+              memory: {{ $V.resources.gnb.requests.memory }}
+              hugepages-1Gi: {{ $V.resources.gnb.requests.hugepages1Gi }}
+              {{- if $V.sriov.enabled }}
+              {{- if $V.sriov.resourceName }}
+              {{ $V.sriov.resourceName }}: 1
+              {{- end }}
+              {{- range $cell := $du.cells }}
+              {{ $cell.ruDPDKResource }}: 1
+              {{- end }}
+              {{- end }}
 
-          {{ $c := 0 | int }}
-          {{range $cell := $values.cells}}
-            {{ $cell.ruDPDKResource }}: 1
-            {{ $c = add1 $c }}
+        - name: srs-gnb-proxy
+          image: {{ $V.image.srs_jbpf_proxy }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/src/out/bin/srsran_reverse_proxy"]
+          args:
+            - "--host-port"
+            - "{{ add $baseProxy $ran_cnt }}"
+            - "--address"
+            - "{{ printf "%s/%s/%s" $jbpfPath $jbpfNS $lcmName }}"
           {{- end }}
+          volumeMounts:
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+          env:
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          resources:
+            limits:
+              {{- toYaml $V.resources.jbpf_proxy.limits | nindent 14 }}
+            requests:
+              {{- toYaml $V.resources.jbpf_proxy.requests | nindent 14 }}
 
-
-          requests:
-            cpu: {{ $.Values.resources.gnb.requests.cpu }}
-            memory: {{ $.Values.resources.gnb.requests.memory }}
-            hugepages-1Gi: {{ $.Values.resources.gnb.requests.hugepages1Gi }}
-            {{ $.Values.sriov.resourceName }}: 1
-
-          {{ $c := 0 | int }}
-          {{range $cell := $values.cells}}
-            {{ $cell.ruDPDKResource }}: 1
-            {{ $c = add1 $c }}
+        - name: jrtc
+          image: {{ $V.jrtc_controller.image }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: jrtc-config
+              mountPath: /jrtc-config
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/jrtc/out/bin/jrtc"]
+          args: ["--config=/jrtc-config/config"]
           {{- end }}
+          securityContext:
+            privileged: true
+          env:
+            - name: HOSTNAME
+              value: {{ ($V.HOSTNAME | default "") | quote }}
+            - name: JRTC_PATH
+              value: "/jrtc"
+            - name: JRTC_APP_PATH
+              value: "/jrtc/out/lib/"
+            - name: LD_LIBRARY_PATH
+              value: "$LD_LIBRARY_PATH:/jrtc/out/lib/"
+            {{- if $V.jrtc_controller.log_analytics.enabled }}
+            - name: LA_WORKSPACE_ID
+              value: {{ $V.jrtc_controller.log_analytics.workspace_id | quote }}
+            - name: LA_PRIMARY_KEY
+              value: {{ $V.jrtc_controller.log_analytics.primary_key | quote }}
+            {{- end }}
+            {{- if $V.udp_forwarder.enabled }}
+            - name: JRTC_JSON_INPUT_PORT
+              value: {{ $baseUDP | quote }}
+            {{- end }}
 
+        {{- if $V.jrtc_controller.local_decoder.enabled }}
+        - name: jrtc-decoder
+          image: {{ $V.jrtc_controller.image }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/jrtc/out/bin/jrtc-ctl"]
+          args:
+            {{- if $V.jrtc_controller.local_decoder.log_analytics.enabled }}
+            - "decoder"
+            - "run"
+            - "--decoder-data-enabled"
+            - "--log-level"
+            - "debug"
+            - "--json-data-enabled"
+            - "--loganalytics-enabled"
+            {{- else }}
+            - "decoder"
+            - "run"
+            - "--decoder-data-enabled"
+            - "--log-level"
+            - "debug"
+            - "--json-data-enabled"
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+        {{- end }}
 
-      - name: srs-gnb-proxy
-        image: "{{ $.Values.image.srs_jbpf_proxy }}"
-        imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
-        command: ["/src/out/bin/srsran_reverse_proxy"]
-        args:
-          - "--host-port"
-          - "{{ add $.Values.jbpf.port }}"
-          - "--address"
-          - "{{ printf "%s/%s/%s" $.Values.jbpf.cfg.jbpf_run_path $.Values.jbpf.cfg.jbpf_namespace $.Values.jbpf.cfg.jbpf_lcm_ipc_name }}"
+{{- else }}
 
-        resources:
-          limits:
-            {{- toYaml $.Values.resources.jbpf_proxy.limits | nindent 12 }}
-          requests:
-            {{- toYaml $.Values.resources.jbpf_proxy.requests | nindent 12 }}
-        volumeMounts:
-          - name: varjbpf
-            mountPath: {{ printf "%s/%s" $.Values.jbpf.cfg.jbpf_run_path $.Values.jbpf.cfg.jbpf_namespace }}
-          - name: codelets
-            mountPath: /codelets
-        env:
-          - name: JBPF_CODELETS
-            value: "/codelets"
+#############################
+# Split mode: CU and DU pods
+#############################
 
+# ---------- CU ----------
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: srs-cu-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
+  labels:
+    app: srs-cu-{{ $ran_name }}
+spec:
+  serviceName: srs-cu-{{ $ran_name }}
+  selector:
+    matchLabels:
+      app: srs-cu-{{ $ran_name }}
+  template:
+    metadata:
+      labels:
+        app: srs-cu-{{ $ran_name }}
+      {{- if $V.sriov.enabled }}
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            { "name": "srs-sriov-cu" }
+          ]
+      {{- end }}
+    spec:
+      serviceAccountName: srs-service-account
+      automountServiceAccountToken: true
+      nodeSelector:
+        {{- include "selectNode" (dict "vals" $V "role" "cu") | nindent 8 }}
+      terminationGracePeriodSeconds: 0
+      {{- if $V.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $V.image.pullSecret }}
+      {{- end }}
+      volumes:
+        - name: dshm
+          hostPath: { path: /dev/shm }
+        - name: hugepage
+          hostPath: { path: /dev/hugepages }
+        - name: sys
+          hostPath: { path: /sys }
+        - name: dev
+          hostPath: { path: /dev }
+        - name: varjbpf
+          hostPath:
+            path: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+        {{- if $V.jbpf.codelets_vol_mount }}
+        - name: codelets
+          hostPath:
+            path: {{ $V.jbpf.codelets_vol_mount | quote }}
+        {{- end }}
+        - name: du-config-volume
+          configMap:
+            name: srs-gnb-cm-{{ $ran_name }}
+        - name: jrtc-config
+          configMap:
+            name: jrtc-config
+      containers:
+        {{- if $V.troubleshooter.enabled }}
+        - name: troubleshooter
+          image: {{ $V.troubleshooter.image }}
+          command: ["/bin/sh","-c","--"]
+          args: ["while true; do sleep 30; done;"]
+        {{- end }}
 
+        {{- if $V.udp_forwarder.enabled }}
+        - name: udpforwarder
+          image: {{ $V.image.srs_jbpf }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          env:
+            {{- if $V.sriov.enabled }}
+            - name: LISTEN_IP
+              value: {{ $V.sriov.cucp_ip | quote }}
+            {{- else }}
+            - name: LISTEN_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- end }}
+            - name: LISTEN_PORT
+              value: {{ (add $baseUDP $ran_cnt) | quote }}
+            - name: FORWARD_IP
+              value: "jrtc-udp-input-cu-{{ $ran_name }}.{{ $.Release.Namespace }}.svc.cluster.local"
+            - name: FORWARD_PORT
+              value: {{ $baseUDP | quote }}
+          command: ["/bin/sh","-c"]
+          args: [{{ if $V.debug_mode.enabled }}"sleep 99999999d"{{ else }}"/udp_forwarder/udp_forwarder.sh"{{ end }}]
+        {{- end }}
+
+        # Role container: CU (same definition as DU except ROLE and RU resources)
+        - name: cu
+          image: {{ $V.image.srs_jbpf }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev/
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+            - name: du-config-volume
+              mountPath: /du-config
+              readOnly: true
+          command: ["/bin/sh","-c"]
+          args: [{{ if $V.debug_mode.enabled }}"sleep 99999999d"{{ else }}"/opt/Scripts/run.sh"{{ end }}]
+          env:
+            - name: ROLE
+              value: "CU"
+            - name: DEBUG_MODE
+              value: {{ $V.debug_mode.enabled | quote }}
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              cpu: {{ $V.resources.gnb.limits.cpu }}
+              memory: {{ $V.resources.gnb.limits.memory }}
+              hugepages-1Gi: {{ $V.resources.gnb.limits.hugepages1Gi }}
+            requests:
+              cpu: {{ $V.resources.gnb.requests.cpu }}
+              memory: {{ $V.resources.gnb.requests.memory }}
+              hugepages-1Gi: {{ $V.resources.gnb.requests.hugepages1Gi }}
+
+        - name: srs-gnb-proxy
+          image: {{ $V.image.srs_jbpf_proxy }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/src/out/bin/srsran_reverse_proxy"]
+          args:
+            - "--host-port"
+            - "{{ add $baseProxy $ran_cnt }}"
+            - "--address"
+            - "{{ printf "%s/%s/%s" $jbpfPath $jbpfNS $lcmName }}"
+          {{- end }}
+          volumeMounts:
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+          env:
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          resources:
+            limits:
+              {{- toYaml $V.resources.jbpf_proxy.limits | nindent 14 }}
+            requests:
+              {{- toYaml $V.resources.jbpf_proxy.requests | nindent 14 }}
+
+        - name: jrtc
+          image: {{ $V.jrtc_controller.image }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: jrtc-config
+              mountPath: /jrtc-config
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/jrtc/out/bin/jrtc"]
+          args: ["--config=/jrtc-config/config"]
+          {{- end }}
+          securityContext:
+            privileged: true
+          env:
+            - name: HOSTNAME
+              value: {{ ($V.HOSTNAME | default "") | quote }}
+            - name: JRTC_PATH
+              value: "/jrtc"
+            - name: JRTC_APP_PATH
+              value: "/jrtc/out/lib/"
+            - name: LD_LIBRARY_PATH
+              value: "$LD_LIBRARY_PATH:/jrtc/out/lib/"
+            {{- if $V.jrtc_controller.log_analytics.enabled }}
+            - name: LA_WORKSPACE_ID
+              value: {{ $V.jrtc_controller.log_analytics.workspace_id | quote }}
+            - name: LA_PRIMARY_KEY
+              value: {{ $V.jrtc_controller.log_analytics.primary_key | quote }}
+            {{- end }}
+            {{- if $V.udp_forwarder.enabled }}
+            - name: JRTC_JSON_INPUT_PORT
+              value: {{ $baseUDP | quote }}
+            {{- end }}
+
+        {{- if $V.jrtc_controller.local_decoder.enabled }}
+        - name: jrtc-decoder
+          image: {{ $V.jrtc_controller.image }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/jrtc/out/bin/jrtc-ctl"]
+          args:
+            {{- if $V.jrtc_controller.local_decoder.log_analytics.enabled }}
+            - "decoder"
+            - "run"
+            - "--decoder-data-enabled"
+            - "--log-level"
+            - "debug"
+            - "--json-data-enabled"
+            - "--loganalytics-enabled"
+            {{- else }}
+            - "decoder"
+            - "run"
+            - "--decoder-data-enabled"
+            - "--log-level"
+            - "debug"
+            - "--json-data-enabled"
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+        {{- end }}
 
 ---
-
-# DNS name: srs-gnb-{{ $ran_name }}-io-in.{{ $.Release.Namespace }}.svc.cluster.local
-kind: Service
-apiVersion: v1
+# ---------- DU ----------
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: srs-gnb-{{ $ran_name }}-io-in
-  namespace: {{ $.Release.Namespace }}
+  name: srs-du-{{ $ran_name }}
+  namespace: {{ $R.Namespace }}
   labels:
-    app: srs-gnb-{{ $ran_name }}
+    app: srs-du-{{ $ran_name }}
 spec:
+  serviceName: srs-du-{{ $ran_name }}
   selector:
-    app: srs-gnb-{{ $ran_name }}
-  type: NodePort
-  ports:
-    - name: io-in-port
-      protocol: UDP
-      port: {{ add $.Values.jbpf.cfg.jbpf_standalone_io_in_port $ran_cnt }}
-      targetPort: {{ add $.Values.jbpf.cfg.jbpf_standalone_io_in_port $ran_cnt }}
-      nodePort: {{ add $.Values.jbpf.cfg.jbpf_standalone_io_in_port $ran_cnt }}
+    matchLabels:
+      app: srs-du-{{ $ran_name }}
+  template:
+    metadata:
+      labels:
+        app: srs-du-{{ $ran_name }}
+      {{- if $V.sriov.enabled }}
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {{- $first := true -}}
+            {{- range $idx_c, $cell := $du.cells -}}
+            {{- if not $first }},{{- end }}
+            { "name": "srs-{{ $ran_name }}-sriov-fh-instance-{{ $idx_c }}" }
+            {{- $first = false -}}
+            {{- end -}}
+          ]
+      {{- end }}
+    spec:
+      serviceAccountName: srs-service-account
+      automountServiceAccountToken: true
+      nodeSelector:
+        {{- include "selectNode" (dict "vals" $V "role" "du") | nindent 8 }}
+      terminationGracePeriodSeconds: 0
+      {{- if $V.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ $V.image.pullSecret }}
+      {{- end }}
+      volumes:
+        - name: dshm
+          hostPath: { path: /dev/shm }
+        - name: hugepage
+          hostPath: { path: /dev/hugepages }
+        - name: sys
+          hostPath: { path: /sys }
+        - name: dev
+          hostPath: { path: /dev }
+        - name: varjbpf
+          hostPath:
+            path: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+        {{- if $V.jbpf.codelets_vol_mount }}
+        - name: codelets
+          hostPath:
+            path: {{ $V.jbpf.codelets_vol_mount | quote }}
+        {{- end }}
+        - name: du-config-volume
+          configMap:
+            name: srs-gnb-cm-{{ $ran_name }}
+        - name: jrtc-config
+          configMap:
+            name: jrtc-config
+      containers:
+        {{- if $V.troubleshooter.enabled }}
+        - name: troubleshooter
+          image: {{ $V.troubleshooter.image }}
+          command: ["/bin/sh","-c","--"]
+          args: ["while true; do sleep 30; done;"]
+        {{- end }}
 
+        {{- if $V.udp_forwarder.enabled }}
+        - name: udpforwarder
+          image: {{ $V.image.srs_jbpf }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          env:
+            - name: LISTEN_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: LISTEN_PORT
+              value: {{ (add $baseUDP $ran_cnt) | quote }}
+            - name: FORWARD_IP
+              value: "jrtc-udp-input-du-{{ $ran_name }}.{{ $.Release.Namespace }}.svc.cluster.local"
+            - name: FORWARD_PORT
+              value: {{ $baseUDP | quote }}
+          command: ["/bin/sh","-c"]
+          args: [{{ if $V.debug_mode.enabled }}"sleep 99999999d"{{ else }}"/udp_forwarder/udp_forwarder.sh"{{ end }}]
+        {{- end }}
 
----
+        # Role container: DU (requests RU resources if SR-IOV is enabled)
+        - name: du
+          image: {{ $V.image.srs_jbpf }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev/
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+            - name: du-config-volume
+              mountPath: /du-config
+              readOnly: true
+          command: ["/bin/sh","-c"]
+          args: [{{ if $V.debug_mode.enabled }}"sleep 99999999d"{{ else }}"/opt/Scripts/run.sh"{{ end }}]
+          env:
+            - name: ROLE
+              value: "DU"
+            - name: DEBUG_MODE
+              value: {{ $V.debug_mode.enabled | quote }}
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              cpu: {{ $V.resources.gnb.limits.cpu }}
+              memory: {{ $V.resources.gnb.limits.memory }}
+              hugepages-1Gi: {{ $V.resources.gnb.limits.hugepages1Gi }}
+              {{- if $V.sriov.enabled }}
+              {{- range $cell := $du.cells }}
+              {{ $cell.ruDPDKResource }}: 1
+              {{- end }}
+              {{- end }}
+            requests:
+              cpu: {{ $V.resources.gnb.requests.cpu }}
+              memory: {{ $V.resources.gnb.requests.memory }}
+              hugepages-1Gi: {{ $V.resources.gnb.requests.hugepages1Gi }}
+              {{- if $V.sriov.enabled }}
+              {{- range $cell := $du.cells }}
+              {{ $cell.ruDPDKResource }}: 1
+              {{- end }}
+              {{- end }}
 
-# DNS name: srs-gnb-{{ $ran_name }}-proxy.{{ $.Release.Namespace }}.svc.cluster.local
-kind: Service
-apiVersion: v1
-metadata:
-  name: srs-gnb-{{ $ran_name }}-proxy
-  namespace: {{ $.Release.Namespace }}
-  labels:
-    app: srs-gnb-{{ $ran_name }}
-spec:
-  selector:
-    app: srs-gnb-{{ $ran_name }}
-  type: NodePort
-  ports:
-    - name: proxy-port
-      protocol: TCP
-      port: {{ add $.Values.jbpf.port $ran_cnt }}
-      targetPort: {{ add $.Values.jbpf.port $ran_cnt }}
-      nodePort: {{ add $.Values.jbpf.port $ran_cnt }}
+        - name: srs-gnb-proxy
+          image: {{ $V.image.srs_jbpf_proxy }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/src/out/bin/srsran_reverse_proxy"]
+          args:
+            - "--host-port"
+            - "{{ add $baseProxy $ran_cnt }}"
+            - "--address"
+            - "{{ printf "%s/%s/%s" $jbpfPath $jbpfNS $lcmName }}"
+          {{- end }}
+          volumeMounts:
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+          env:
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          resources:
+            limits:
+              {{- toYaml $V.resources.jbpf_proxy.limits | nindent 14 }}
+            requests:
+              {{- toYaml $V.resources.jbpf_proxy.requests | nindent 14 }}
 
----
+        - name: jrtc
+          image: {{ $V.jrtc_controller.image }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: jrtc-config
+              mountPath: /jrtc-config
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+            {{- if $V.jbpf.codelets_vol_mount }}
+            - name: codelets
+              mountPath: /codelets
+            {{- end }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/jrtc/out/bin/jrtc"]
+          args: ["--config=/jrtc-config/config"]
+          {{- end }}
+          securityContext:
+            privileged: true
+          env:
+            - name: HOSTNAME
+              value: {{ ($V.HOSTNAME | default "") | quote }}
+            - name: JRTC_PATH
+              value: "/jrtc"
+            - name: JRTC_APP_PATH
+              value: "/jrtc/out/lib/"
+            - name: LD_LIBRARY_PATH
+              value: "$LD_LIBRARY_PATH:/jrtc/out/lib/"
+            {{- if $V.jrtc_controller.log_analytics.enabled }}
+            - name: LA_WORKSPACE_ID
+              value: {{ $V.jrtc_controller.log_analytics.workspace_id | quote }}
+            - name: LA_PRIMARY_KEY
+              value: {{ $V.jrtc_controller.log_analytics.primary_key | quote }}
+            {{- end }}
+            {{- if $V.udp_forwarder.enabled }}
+            - name: JRTC_JSON_INPUT_PORT
+              value: {{ $baseUDP | quote }}
+            {{- end }}
 
-# DNS name:srs-gnb-{{ $ran_name }}-udpforwarder.{{ $.Release.Namespace }}.svc.cluster.local
-kind: Service
-apiVersion: v1
-metadata:
-  name: srs-gnb-{{ $ran_name }}-udpforwarder
-  namespace: {{ $.Release.Namespace }}
-  labels:
-    app: srs-gnb-{{ $ran_name }}
-spec:
-  selector:
-    app: srs-gnb-{{ $ran_name }}
-  type: NodePort
-  ports:
-    - name: udpforwarder-port
-      protocol: UDP
-      port: {{ add $.Values.udp_forwarder.port $ran_cnt }}
-      targetPort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
-      nodePort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
+        {{- if $V.jrtc_controller.local_decoder.enabled }}
+        - name: jrtc-decoder
+          image: {{ $V.jrtc_controller.image }}
+          imagePullPolicy: {{ $V.image.pullPolicy }}
+          {{- if $V.debug_mode.enabled }}
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          {{- else }}
+          command: ["/jrtc/out/bin/jrtc-ctl"]
+          args:
+            {{- if $V.jrtc_controller.local_decoder.log_analytics.enabled }}
+            - "decoder"
+            - "run"
+            - "--decoder-data-enabled"
+            - "--log-level"
+            - "debug"
+            - "--json-data-enabled"
+            - "--loganalytics-enabled"
+            {{- else }}
+            - "decoder"
+            - "run"
+            - "--decoder-data-enabled"
+            - "--log-level"
+            - "debug"
+            - "--json-data-enabled"
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: varjbpf
+              mountPath: "{{ $jbpfPath }}/{{ $jbpfNS }}"
+        {{- end }}
 
+{{- end }}  {{/* end split vs monolithic */}}
 
-{{ $ran_cnt = add1 $ran_cnt }}
-
+{{- $ran_cnt = add1 $ran_cnt -}}
 {{- end }}
-
-
-
-
-
