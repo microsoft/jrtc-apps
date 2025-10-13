@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Create the final config file
-python3 update_config.py --config msft_config.yaml --output config.yaml --input /du-config/config.json --du_name $(jq -r '.duConfigs | keys[0]' /du-config/config.json)
+python3 update_config.py --config /du-config/default_config.yaml --output config.yaml --input /du-config/config.json --du_name $(jq -r '.duConfigs | keys[0]' /du-config/config.json)
 
 
 # Source def_taskset.sh if it exists

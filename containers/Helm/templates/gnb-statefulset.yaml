@@ -11,6 +11,8 @@ metadata:
 data:
   config.json: |-
       {{ $.Values | toJson }}
+  default_config.yaml: |-
+{{ $.Values.srs_ran_config | toYaml | nindent 4 }}
 
 ---
 apiVersion: apps/v1
