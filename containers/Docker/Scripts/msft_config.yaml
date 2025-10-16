@@ -15,6 +15,8 @@ cu_cp:
                 sd: 163
               - sst: 1
                 sd: 164
+              - sst: 1
+                sd: 165
           - plmn: "00101"
             tai_slice_support_list:
               - sst: 1
@@ -23,6 +25,8 @@ cu_cp:
                 sd: 163
               - sst: 1
                 sd: 164
+              - sst: 1
+                sd: 165
   security:
     nia_pref_list: nia2,nia1
     nea_pref_list: nea2,nea1,nea3,nea0    # nea2 required for iPhone
