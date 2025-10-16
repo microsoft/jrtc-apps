@@ -46,7 +46,7 @@
   - [6.10. rlc\_ul\_deliver\_sdu](#610-rlc_ul_deliver_sdu)
   - [6.11. rlc\_ul\_deletion](#611-rlc_ul_deletion)
   - [6.12. rlc\_collect](#612-rlc_collect)
-    - [6.12.1. Downlink "north" statistics](#6121-downlink-north-statistics)
+    - [6.12.1. Downlink statistics](#6121-downlink-statistics)
     - [6.12.2. Uplink statistics](#6122-uplink-statistics)
 - [7. MAC](#7-mac)
   - [7.1. mac\_sched\_bsr\_stats](#71-mac_sched_bsr_stats)
@@ -71,8 +71,10 @@
 - [9. XRAN Packets](#9-xran-packets)
   - [9.1. xran\_packets\_collect](#91-xran_packets_collect)
   - [9.2. xran\_packets\_report](#92-xran_packets_report)
-- [10. Performance statistics](#10-performance-statistics)
-  - [10.1. jbpf\_stats\_report](#101-jbpf_stats_report)
+- [10. Slice management](#10-slice-management)
+  - [10.1. slice\_management](#101-slice_management)
+- [11. Performance statistics](#11-performance-statistics)
+  - [11.1. jbpf\_stats\_report](#111-jbpf_stats_report)
 
 
 # 1. Introduction
@@ -422,6 +424,7 @@ This is sampled in every RLC UL hook.
 
 # 7. MAC
 
+
 ## 7.1. [mac_sched_bsr_stats](../codelets/mac/mac_sched_bsr_stats.cpp) 
 Binds to hook [mac_sched_ul_bsr_indication](srsran_hooks.md#521-mac_sched_ul_bsr_indication).
 
@@ -522,13 +525,22 @@ Binds to hook [report_stats](srsran_hooks.md#121-report_stats).
 
 Sends messages as defined in [xran_packet_info.proto](../codelets/xran_packets/xran_packet_info.proto).
 
-# 10. Performance statistics
+# 10. Slice management
+
+## 10.1. [slice_management](../codelets/slice_mgmt/slice_mgmt.cpp)
+Binds to hook [mac_sched_slice_mgmt](srsran_hooks.md#121-mac_sched_slice_mgmt-control-hook).
+
+This codelet is used to update the allocation of slices.
+
+It works in conjunction with the [slice_mgmt](../jrtc_apps/slice_mgmt/slice_mgmt_app.py) Jrtc application.
+
+# 11. Performance statistics
 
 This codelet is used to collect statistics of the performace of the codelets.
 
 It can be used to identify cases where codelets are taking longer than expected. It provides a logarithmic histogram with 64 bins, and approximates the 50th, 90th, 95th, and 99th percentiles.
 
-## 10.1. [jbpf_stats_report](../codelets/perf/jbpf_stats_report.c)
-Binds to hook [report_stats](srsran_hooks.md#121-report_stats).  
+## 11.1. [jbpf_stats_report](../codelets/perf/jbpf_stats_report.c)
+Binds to hook [report_stats](srsran_hooks.md#131-report_stats).  
 
 Sends messages as defined in [jbpf_stats_report.proto](../codelets/perf/jbpf_stats_report.proto).

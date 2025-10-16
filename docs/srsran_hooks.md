@@ -94,8 +94,10 @@
     - [11.2.3. __rlc\_ul\_rx\_pdu__](#1123-rlc_ul_rx_pdu)
     - [11.2.4. __rlc\_ul\_sdu\_recv\_started__](#1124-rlc_ul_sdu_recv_started)
     - [11.2.5. __rlc\_ul\_sdu\_delivered__](#1125-rlc_ul_sdu_delivered)
-- [12. Periodic performance hook](#12-periodic-performance-hook)
-  - [12.1. report\_stats](#121-report_stats)
+- [12. Slice management](#12-slice-management)
+  - [12.1. __mac\_sched\_slice\_mgmt control hook__](#121-mac_sched_slice_mgmt-control-hook)
+- [13. Periodic performance hook](#13-periodic-performance-hook)
+  - [13.1. report\_stats](#131-report_stats)
 
 
 
@@ -984,9 +986,47 @@ typedef enum {
         srs_meta_data2: latency_ns // from start of SDU reception to SDU delivery
     ```
 
-# 12. Periodic performance hook
+# 12. Slice management
 
-## 12.1. report_stats
+## 12.1. __mac_sched_slice_mgmt control hook__
+
+    This is called from the code in the srsRAN where the scheduler is deciding how to schedule the various slices.
+    
+    The hook has the current slice configuration passed in using a __jbpf_slice_allocation__ structure as shown below ..
+```c
+    // MAC slice control
+    #define JBPF_MAX_SLICES (16)
+    struct jbpf_slice_allocation {
+        uint8_t num_slices;
+        struct {
+            uint16_t pci;
+            uint32_t plmn_id;              // bcd format
+            struct {
+                uint8_t sst;
+                uint32_t sd;
+            } nssai;
+            uint8_t min_prb_policy_ratio;  // Sets the minimum percentage of PRBs to be allocated to the slice. Supported [0 - 100].
+            uint8_t max_prb_policy_ratio;  // Sets the maximum percentage of PRBs to be allocated to the slice. Supported [1 - 100].
+            uint8_t priority;              // Sets the slice priority. Values: [0 - 254].
+        } slices[JBPF_MAX_SLICES];
+    };
+```
+    
+    Context info:  
+    ```
+        sfn : current sfn
+        slot_index: current slot index
+        data: pointer to the __jbpf_slice_allocation__
+        data_end: pointer to end of the __jbpf_slice_allocation__
+    ```
+
+    It is a control hook.  The srsRAN slice configuration is updated if the codelet changes the contents of the __jbpf_slice_allocation__ structure.
+
+    Note that no slices can added or deleted, only the __min_prb_policy_ratio__, __max_prb_policy_ratio__ and __priority__ fields can be changed.
+
+# 13. Periodic performance hook
+
+## 13.1. report_stats
 
 This is a predefine hook built into the Jbpf framework.
 It is called invoked every second.
