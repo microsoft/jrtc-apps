@@ -39,7 +39,6 @@ cu_cp:
         report_type: periodical
         report_interval_ms: 1024
 
-
 cell_cfg:
   dl_arfcn: 630684
   common_scs: 30
@@ -65,6 +64,19 @@ cell_cfg:
     prach_frequency_start: 12
   pusch:
     mcs_table: qam256
+  slicing:   # Use default slice allocations
+    -   # slice=internet
+      sst: 1
+      sd: 162
+    -  # slice=internet2
+      sst: 1
+      sd: 163
+    -  # slice=internet3
+      sst: 1
+      sd: 164
+    -  # slice=default
+      sst: 1
+      sd: 165
 
 cells:
   - pci: 1
