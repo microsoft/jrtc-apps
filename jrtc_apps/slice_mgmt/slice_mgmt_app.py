@@ -13,7 +13,8 @@ Key features:
 - Initializes a JRTC application with request and indication streams for slice management.
 - Sends an initial GET request to retrieve current slice allocations.
 - Processes slice allocation indications, logs details, and stores state.
-- Periodically sends SET requests to update slice allocations (e.g., swapping slice 0/1 configs).
+- Periodically sends SET_SLICE_ALLOC requests to update slice allocations.
+- For the first SET_SLICE_ALLOC request, the min_prb_policy_ratio is set to 60% and 40% for slices 0 and 1 respectively.  For subsequent SET_SLICE_ALLOC requests, these values are swapped.
 """
 
 
@@ -76,10 +77,10 @@ class AppStateVars:
     app: JrtcApp
     device: str
     initial_get_requested: bool
+    first_request_sent: bool
     next_set_request_ts: dt.datetime
     slice_allocation: slice_mgmt_ind
     
-
 
 ##########################################################################
 def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_data_entry, state: AppStateVars):
@@ -127,17 +128,28 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
 
                     # state.slice_allocation should be set
                     if state.slice_allocation is None:
-                        state.logger.log_msg(True, False, "", "ERROR: state.slice_allocation is None !!")
+                        state.logger.log_msg(True, False, "", "slice_mgmt_app: ERROR: state.slice_allocation is None !!")
 
                     # only do this there are >=2 slices
                     if state.slice_allocation.slice_count >= 2:
 
+                        # if this is the first request, set slice[0].min = 60, and set slice[1].min = 40
+                        # if not first request, swap slice[0].min and slice[1].min 
                         s0, s1 = state.slice_allocation.slice[0], state.slice_allocation.slice[1]
-                        for attr in ("min_prb_policy_ratio", "max_prb_policy_ratio", "priority"):
-                            tmp = getattr(s0, attr)
-                            setattr(s0, attr, getattr(s1, attr))
-                            setattr(s1, attr, tmp)
+                        if not state.first_request_sent:
+                            s0.min_prb_policy_ratio = 60
+                            s1.min_prb_policy_ratio = 40
+                        else:
+                            for attr in ("min_prb_policy_ratio", "max_prb_policy_ratio", "priority"):
+                                tmp = getattr(s0, attr)
+                                setattr(s0, attr, getattr(s1, attr))
+                                setattr(s1, attr, tmp)
 
+                        state.logger.log_msg(True, False, "", f"slice_mgmt_app: Sending SET_SLICE_ALLOC:    sfn {state.slice_allocation.sfn} slot_index {state.slice_allocation.slot_index} num custom slices {state.slice_allocation.slice_count}")
+                        slices = list(state.slice_allocation.slice)
+                        for i in range(state.slice_allocation.slice_count):
+                            state.logger.log_msg(True, False, "", f"slice_mgmt_app:   slice {i} : pci  {slices[i].pci} nssai {slices[i].nssai.sst}/{slices[i].nssai.sd} min {slices[i].min_prb_policy_ratio} max {slices[i].max_prb_policy_ratio} priority {slices[i].priority}")
+                    
                         req = slice_mgmt_req()
                         req.msg_type = slice_mgmt_msg_type_SET_SLICE_ALLOC
                         req.has_set_req = True
@@ -154,12 +166,12 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                         data_len = ctypes.sizeof(req)
                         data_to_send = ctypes.string_at(ctypes.byref(req), data_len)
 
-                        state.logger.log_msg(True, False, "", "slice_mgmt_app: Sending SET_SLICE_ALLOC request")
-
                         # Send the SET_SLICE_ALLOC request to the codelet
                         res = jrtc_app_router_channel_send_input_msg(
                             state.app, SLICE_MGMT_REQ_SIDX, data_to_send, data_len
                         )
+
+                        state.first_request_sent = True
 
                     # clear next_set_request_ts.  It will be re-set when the next indication is received
                     state.next_set_request_ts = None
@@ -179,17 +191,17 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
 
                 if stream_idx == SLICE_MGMT_IND_SIDX:
 
-                    state.logger.log_msg(True, False, "", "slice_mgmt_app: Received indication")
+                    state.logger.log_msg(True, False, "", "slice_mgmt_app: Received INDICATION")
 
                     data_ptr = ctypes.cast(
                         data_entry.data, ctypes.POINTER(slice_mgmt_ind)
                     )
                     data = data_ptr.contents
 
-                    state.logger.log_msg(True, False, "", f"SLICE_MGMT_IND_SIDX: timestamp  {data.timestamp} sfn {data.sfn} slot_index {data.slot_index} num custom slices {data.slice_count}")
+                    state.logger.log_msg(True, False, "", f"slice_mgmt_app: SLICE_MGMT_IND_SIDX: timestamp  {data.timestamp} sfn {data.sfn} slot_index {data.slot_index} num custom slices {data.slice_count}")
                     slices = list(data.slice)
                     for i in range(data.slice_count):
-                        state.logger.log_msg(True, False, "", f"  slice {i} : pci  {slices[i].pci} nssai {slices[i].nssai.sst}/{slices[i].nssai.sd} min {slices[i].min_prb_policy_ratio} max {slices[i].max_prb_policy_ratio} priority {slices[i].priority}")
+                        state.logger.log_msg(True, False, "", f"slice_mgmt_app:   slice {i} : pci  {slices[i].pci} nssai {slices[i].nssai.sst}/{slices[i].nssai.sd} min {slices[i].min_prb_policy_ratio} max {slices[i].max_prb_policy_ratio} priority {slices[i].priority}")
                     
                     # store the current slice allocation
                     state.slice_allocation = data
@@ -197,13 +209,15 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                     # trigger an update in <params.slice_update_periodicity_secs> seconds
                     state.next_set_request_ts = dt.datetime.utcnow() + dt.timedelta(seconds=params.slice_update_periodicity_secs)
 
-                    state.logger.log_msg(True, False, "", f"Triggering a slice allocation update in {params.slice_update_periodicity_secs} seconds, "
-                        "sfn/slot:"
-                        f"{'Any' if (params.slice_update_sfn is None) else params.slice_update_sfn}/"
-                        f"{'Any' if (params.slice_update_slot_index is None) else params.slice_update_slot_index}")
+                    if state.slice_allocation.slice_count >= 2:
+
+                        state.logger.log_msg(True, False, "", f"slice_mgmt_app: Triggering a slice allocation update in {params.slice_update_periodicity_secs} seconds, "
+                            "sfn/slot:"
+                            f"{'Any' if (params.slice_update_sfn is None) else params.slice_update_sfn}/"
+                            f"{'Any' if (params.slice_update_slot_index is None) else params.slice_update_slot_index}")
 
                 else:
-                    state.logger.log_msg(True, False, "", f"Unknown stream index: {stream_idx}")
+                    state.logger.log_msg(True, False, "", f"slice_mgmt_app: Unknown stream index: {stream_idx}")
                     output = {
                         "stream_index": stream_idx,
                         "error": "Unknown stream index"
@@ -266,6 +280,7 @@ def jrtc_start_app(capsule):
         app=None,
         device=device,
         initial_get_requested=False,
+        first_request_sent=False,
         next_set_request_ts=None,
         slice_allocation=None)
 
@@ -290,7 +305,7 @@ def jrtc_start_app(capsule):
         None  # No AppChannelCfg
     ))
     SLICE_MGMT_REQ_SIDX = last_cnt
-    state.logger.log_msg(True, False, "", f"SLICE_MGMT_REQ_SIDX: {SLICE_MGMT_REQ_SIDX}")
+    state.logger.log_msg(True, False, "", f"slice_mgmt_app: SLICE_MGMT_REQ_SIDX: {SLICE_MGMT_REQ_SIDX}")
     last_cnt += 1
 
     streams.append(JrtcStreamCfg_t(
@@ -303,7 +318,7 @@ def jrtc_start_app(capsule):
         None    # No AppChannelCfg 
     ))
     SLICE_MGMT_IND_SIDX = last_cnt
-    state.logger.log_msg(True, False, "", f"SLICE_MGMT_IND_SIDX: {SLICE_MGMT_IND_SIDX}")
+    state.logger.log_msg(True, False, "", f"slice_mgmt_app: SLICE_MGMT_IND_SIDX: {SLICE_MGMT_IND_SIDX}")
     last_cnt += 1
 
     app_cfg = JrtcAppCfg_t(
@@ -318,7 +333,7 @@ def jrtc_start_app(capsule):
 
     state.app = jrtc_app_create(capsule, app_cfg, app_handler, state)
 
-    state.logger.log_msg(True, True, "", f"Number of subscribed streams: {len(streams)}")
+    state.logger.log_msg(True, True, "", f"slice_mgmt_app: Number of subscribed streams: {len(streams)}")
 
     # run the app - This is blocking until the app exists
     jrtc_app_run(state.app)
