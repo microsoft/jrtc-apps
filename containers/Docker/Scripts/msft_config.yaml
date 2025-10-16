@@ -52,10 +52,6 @@ cell_cfg:
      ssb_block_power_dbm: -21
   nof_antennas_dl: 4
   nof_antennas_ul: 4
-  # tdd_ul_dl_cfg:
-  #   nof_dl_symbols: 5
-  #   nof_dl_slots: 5
-  #   nof_ul_slots: 4
   tdd_ul_dl_cfg:
     dl_ul_tx_period: 10
     nof_dl_slots: 7
