@@ -250,10 +250,11 @@ debug_mode:
 # The following are directly copied into srsRAN config
 # For reference, see https://docs.srsran.com/projects/project/en/latest/user_manuals/source/config_ref.html
 
+# log levels can be info,debug,warning,error, 
 log:
-  rrc_level: info
-  mac_level: info
-  rlc_level: info
+  rrc_level: warning
+  mac_level: warning
+  rlc_level: warning
 
 # Also metrics, pcap
 
