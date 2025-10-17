@@ -22,6 +22,13 @@ This project provides a collection of sample applications for instrumenting **sr
 
 # 2. Significant Commits / Features
 
+[Oct 17, 2025,  commit 792a739](https://github.com/microsoft/jrtc-apps/commit/792a739ec3a126948469cc4c87d248d716c7adf1) - Dynamic slice allocation
+
+- Multiple modifications were implemented to support dynamic reconfiguration of spectrum PRB allocations across slices. These changes include:-
+  - Updates to srsRAN to add the __mac_sched_slice_mgmt__ control hook, and some related mapping functions.
+  - Added [slice_mgmt control codelet](./codelets/slice_mgmt/).
+  - Added [slice_mgmt Jrtc application](./jrtc_apps/slice_mgmt/), used in conjunction with the codelet.
+
 [Sep 10, 2025,  commit bdc858c](https://github.com/microsoft/jrtc-apps/commit/bdc858c2f27f4d903f6466406f7514faf677d364) - srsRAN v25.04 support
 
 - Upgrade Jrtc to srsRAN v25.04
