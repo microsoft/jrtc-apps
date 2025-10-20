@@ -7,3 +7,6 @@
 [submodule "containers/srsRAN/Docker/srsRAN_Project"]
 	path = containers/Docker/srsRAN_Project
 	url = https://github.com/xfoukas/srsRAN_Project_jbpf.git
+[submodule "containers/Docker/srsRAN_UE"]
+	path = containers/Docker/srsRAN_UE
+	url = https://github.com/srsran/srsRAN_4G.git
