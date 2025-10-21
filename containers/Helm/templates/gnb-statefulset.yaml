@@ -321,6 +321,30 @@ spec:
       targetPort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
       nodePort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
 
+---
+# ZMQ service for gNB – used by UE to connect (tx/rx)
+# DNS: srs-gnb-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-{{ $ran_name }}-zmq
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: srs-gnb-{{ $ran_name }}
+spec:
+  selector:
+    app: srs-gnb-{{ $ran_name }}
+  type: ClusterIP
+  ports:
+    - name: zmq-tx
+      protocol: TCP
+      port: {{ add $.Values.zmq.tx_port_base $ran_cnt }}
+      targetPort: {{ add $.Values.zmq.tx_port_base $ran_cnt }}
+    - name: zmq-rx
+      protocol: TCP
+      port: {{ add $.Values.zmq.rx_port_base $ran_cnt }}
+      targetPort: {{ add $.Values.zmq.rx_port_base $ran_cnt }}
+
 
 {{ $ran_cnt = add1 $ran_cnt }}
 

@@ -240,6 +240,16 @@ dmimo:
           bitmask: 204
 
 
+zmq:
+  tx_port_base: 5000
+  rx_port_base: 5001
+
+ue:
+  replicas: 1
+  apn: internet
+  imsi: "001010000000001"
+  log_level: DEBUG
+
 
 # If enabled, the chart doesn't start executables in the containers, 
 # so a user can exec into them and start them manually
