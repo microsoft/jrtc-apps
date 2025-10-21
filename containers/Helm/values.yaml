@@ -241,6 +241,7 @@ dmimo:
 
 
 zmq:
+  enabled: False
   tx_port_base: 5000
   rx_port_base: 5001
 
