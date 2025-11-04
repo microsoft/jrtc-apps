@@ -1,0 +1,356 @@
+---
+# Source: srs-ran-5g-jbpf/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: srs-service-account
+  namespace: ran
+---
+# Source: srs-ran-5g-jbpf/templates/secrets.yaml
+apiVersion: v1
+data:
+  .dockerconfigjson: "eyJhdXRocyI6eyJodHRwczovL2FsdHJhbjVncmFuLmF6dXJlY3IuaW8iOnsidXNlcm5hbWUiOiIlIXMoPG5pbD4pIiwicGFzc3dvcmQiOiIlIXMoPG5pbD4pIiwiYXV0aCI6IkpTRnpLRHh1YVd3K0tUb2xJWE1vUEc1cGJENHAifX19"
+kind: Secret
+metadata:
+  namespace: ran
+  name: altran-acr-cred
+type: kubernetes.io/dockerconfigjson
+---
+# Source: srs-ran-5g-jbpf/templates/gnb-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: srs-gnb-cm-du1
+  namespace: ran
+data:
+  # Store the entire values tree as JSON in one key; avoids indentation pitfalls
+  config.json: "{\"HOSTNAME\":\"k8s-master\",\"cell_cfg\":{\"plmn\":\"00101\"},\"das\":{\"dasboxes\":{\"das1\":{\"cells\":{\"cell1\":{\"ruLocalMAC\":\"00:00:11:11:33:71\",\"ruNAME\":\"das1\",\"ruRemoteMAC\":\"AA:BB:CC:11:33:71\",\"vlan\":71}},\"middlebox\":{\"dasName\":\"das-du-front\",\"isolcore\":2,\"localMAC\":\"00:00:11:11:22:33\",\"remoteMAC\":\"AA:BB:CC:11:22:33\",\"ruDPDKResource\":\"intel.com/intel_sriov_dpdk_ru1\",\"vlan\":1}}},\"enabled\":false,\"image\":\"altran5gran.azurecr.io/ranbooster/ranbooster-lite:v3\"},\"debug_mode\":{\"enabled\":true},\"dmimo\":{\"enabled\":false,\"image\":\"altran5gran.azurecr.io/ranbooster/ranbooster-lite:v3\",\"vrus\":{\"vru1\":{\"middlebox\":{\"dmimoMiddleboxName\":\"middlebox-vru1\",\"isolcore\":3,\"localMAC\":\"AA:BB:CC:11:33:41\",\"remoteMAC\":\"00:00:11:11:33:41\",\"ruDPDKResource\":\"intel.com/intel_sriov_dpdk_ru7\",\"vlan\":51},\"rus\":{\"ru1\":{\"bitmask\":51,\"ruDPDKResource\":\"intel.com/intel_sriov_dpdk_ru8\",\"ruLocalMAC\":\"00:11:22:33:0A:A4\",\"ruNAME\":\"ru1\",\"ruRemoteMAC\":\"6C:AD:AD:00:0A:A4\",\"ruVLAN\":\"31\"},\"ru2\":{\"bitmask\":204,\"ruDPDKResource\":\"intel.com/intel_sriov_dpdk_ru9\",\"ruLocalMAC\":\"00:11:22:33:0B:4E\",\"ruNAME\":\"ru2\",\"ruRemoteMAC\":\"6C:AD:AD:00:0B:4E\",\"ruVLAN\":\"32\"}}}}},\"duConfigs\":{\"du1\":{\"cells\":{\"cell1\":{\"cellID\":3333,\"physicalCellID\":2017,\"ruBandwidth\":40,\"ruDLArfcn\":630684,\"ruDPDKResource\":\"intel.com/intel_sriov_dpdk_ru0\",\"ruLocalMAC\":\"66:44:33:22:11:00\",\"ruNAME\":\"RU1\",\"ruRemoteMAC\":\"6C:AD:AD:00:00:69\",\"ruVLAN\":\"1\"}},\"midhaul\":{\"ip\":\"192.168.110.233\"}}},\"image\":{\"pullPolicy\":\"Always\",\"srs_jbpf\":\"ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.04-latest\",\"srs_jbpf_proxy\":\"ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.04-latest\"},\"jbpf\":{\"cfg\":{\"jbpf_agent_cpu\":0,\"jbpf_agent_policy\":1,\"jbpf_agent_priority\":30,\"jbpf_enable_ipc\":1,\"jbpf_enable_lcm_ipc\":1,\"jbpf_io_mem_size_mb\":1024,\"jbpf_ipc_mem_name\":\"jrt_controller\",\"jbpf_lcm_ipc_name\":\"jbpf_lcm_ipc\",\"jbpf_maint_cpu\":0,\"jbpf_maint_policy\":0,\"jbpf_maint_priority\":0,\"jbpf_namespace\":\"jbpf\",\"jbpf_run_path\":\"/tmp\",\"jbpf_standalone_io_in_port\":30400,\"jbpf_standalone_io_out_ip\":\"PUT_JBPF_DECODER_IP_HERE\",\"jbpf_standalone_io_out_port\":20788,\"jbpf_standalone_io_policy\":0,\"jbpf_standalone_io_priority\":0},\"codelets_vol_mount\":\"/home/netsys/jrtc-apps-c5g/codelets\",\"port\":30450},\"jrtc_controller\":{\"apps_vol_mount\":\"/home/netsys/jrtc-apps-c5g/jrtc_apps\",\"image\":\"ghcr.io/microsoft/jrt-controller/jrt-controller-azurelinux:latest\",\"local_decoder\":{\"enabled\":true,\"log_analytics\":{\"enabled\":false},\"port\":30501},\"log_analytics\":{\"enabled\":false,\"primary_key\":\"PUT_PRIMARY_KEY_HERE\",\"workspace_id\":\"PUT_WORKSPACE_ID_HERE\"},\"logging\":{\"jbpf_level\":\"info\",\"jrtc_level\":\"info\"},\"port\":30500},\"log\":{\"mac_level\":\"info\",\"rlc_level\":\"info\",\"rrc_level\":\"info\"},\"ngcParams\":{\"coreIP\":\"192.168.101.50\",\"plmn\":\"00101\",\"tac\":\"000001\"},\"nodeSelector\":{\"cuHostname\":\"\",\"duHostname\":\"\",\"hostname\":\"k8s-worker6\"},\"resources\":{\"das\":{\"limits\":{\"cpu\":1,\"hugepages2Gi\":\"4Gi\",\"memory\":\"2Gi\"},\"requests\":{\"cpu\":1,\"hugepages2Gi\":\"4Gi\",\"memory\":\"2Gi\"}},\"dmimo\":{\"limits\":{\"cpu\":1,\"hugepages2Gi\":\"4Gi\",\"memory\":\"2Gi\"},\"requests\":{\"cpu\":1,\"hugepages2Gi\":\"4Gi\",\"memory\":\"2Gi\"}},\"gnb\":{\"limits\":{\"cpu\":5,\"hugepages1Gi\":\"4Gi\",\"memory\":\"20Gi\"},\"requests\":{\"cpu\":5,\"hugepages1Gi\":\"4Gi\",\"memory\":\"20Gi\"}},\"jbpf_proxy\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"500Mi\"},\"requests\":{\"cpu\":\"500m\",\"memory\":\"500Mi\"}},\"jrtc\":{\"limits\":{\"cpu\":1,\"hugepages2Gi\":\"2Gi\",\"memory\":\"1Gi\"},\"requests\":{\"cpu\":1,\"hugepages2Gi\":\"2Gi\",\"memory\":\"1Gi\"}}},\"services\":{\"jrtc\":{\"cuNodePort\":30500,\"du\":{\"enabled\":false,\"nodePort\":30510,\"type\":\"ClusterIP\"}},\"proxy\":{\"cu\":{\"nodePort\":30511,\"type\":\"ClusterIP\"},\"du\":{\"nodePort\":30501,\"type\":\"NodePort\"}},\"udpforwarder\":{\"cu\":{\"nodePort\":30512,\"type\":\"ClusterIP\"},\"du\":{\"nodePort\":30502,\"type\":\"NodePort\"}}},\"splitDeployment\":false,\"sriov\":{\"cniVersion\":\"0.3.1\",\"cucp_gateway\":\"192.168.101.1\",\"cucp_ip\":\"192.168.101.205\",\"cucp_prefix\":24,\"cuup_gateway\":\"192.168.110.1\",\"cuup_ip\":\"192.168.110.205\",\"cuup_prefix\":24,\"enabled\":false,\"resourceName\":\"intel.com/intel_810_1\"},\"system\":{\"eal_cpu_args\":\"--lcores (0-22)@(9-31)\",\"taskset_cpu_args\":\"9-31\"},\"troubleshooter\":{\"enabled\":true,\"image\":\"praqma/network-multitool\"},\"udp_forwarder\":{\"enabled\":true,\"port\":30502},\"vlan_isolation\":{\"enabled\":false,\"url\":\"192.168.1.50:8080\"}}"
+---
+# Source: srs-ran-5g-jbpf/templates/jrtc-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jrtc-config
+  namespace: ran
+data:
+  config: |-
+    jbpf_io_config:
+      jbpf_namespace: jbpf
+      jbpf_path: /tmp
+    jrtc_router_config:
+      ipc_name: jrt_controller
+    logging:
+      jrtc_level: info
+      jbpf_level: info
+---
+# Source: srs-ran-5g-jbpf/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: access-sriov-config
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["sriov-device-plugin-config"]
+  verbs: ["get"]
+---
+# Source: srs-ran-5g-jbpf/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: access-sriov-config-binding
+subjects:
+- kind: ServiceAccount
+  name: srs-service-account
+  namespace: ran
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: access-sriov-config
+---
+# Source: srs-ran-5g-jbpf/templates/serviceaccount.yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: srs-role
+  namespace: ran
+rules:
+  # Pod / runtime introspection for gNB+JRTC stacked Pod
+- apiGroups: ["", "apps"]
+  resources: ["pods", "endpoints", "configmaps"]
+  verbs: ["get", "list", "watch", "patch", "update"]
+- apiGroups: [""]
+  resources: ["pods/log", "pods/exec"]
+  verbs: ["get", "list", "create"]
+---
+# Source: srs-ran-5g-jbpf/templates/serviceaccount.yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: srs-role-binding
+  namespace: ran
+subjects:
+- kind: ServiceAccount
+  name: srs-service-account
+  namespace: ran
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: srs-role
+
+# Allow the srs-service-account to read the sriov-device-plugin-config ConfigMap (cluster-scoped permission)
+---
+# Source: srs-ran-5g-jbpf/templates/services.yaml
+# Monolithic mode (unchanged)
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-stack-du1
+  namespace: ran
+  labels: { app: srs-stack-du1 }
+spec:
+  clusterIP: None
+  selector: { app: srs-stack-du1 }
+  ports: [ { name: dummy, port: 12345, targetPort: 12345 } ]
+---
+# Source: srs-ran-5g-jbpf/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-service-du1
+  namespace: ran
+  labels: { app: srs-stack-du1 }
+spec:
+  type: NodePort
+  selector: { app: srs-stack-du1 }
+  ports:
+    - { name: http, protocol: TCP, port: 3001, targetPort: 3001, nodePort: 30500 }
+---
+# Source: srs-ran-5g-jbpf/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: jrtc-udp-input-du1
+  namespace: ran
+  labels: { app: srs-stack-du1 }
+spec:
+  type: ClusterIP
+  selector: { app: srs-stack-du1 }
+  ports:
+    - { name: udp, protocol: UDP, port: 30502, targetPort: 30502 }
+---
+# Source: srs-ran-5g-jbpf/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-du1-proxy
+  namespace: ran
+  labels: { app: srs-stack-du1 }
+spec:
+  type: NodePort
+  selector: { app: srs-stack-du1 }
+  ports:
+    - name: proxy
+      protocol: TCP
+      port: 30450
+      targetPort: 30450
+      nodePort: 30501
+---
+# Source: srs-ran-5g-jbpf/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-du1-udpforwarder
+  namespace: ran
+  labels: { app: srs-stack-du1 }
+spec:
+  type: NodePort
+  selector: { app: srs-stack-du1 }
+  ports:
+    - name: udpforwarder
+      protocol: UDP
+      port: 30502
+      targetPort: 30502
+      nodePort: 30502
+---
+# Source: srs-ran-5g-jbpf/templates/gnb-statefulset.yaml
+########################################
+# Monolithic (stacked) CU+DU StatefulSet
+########################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: srs-stack-du1
+  namespace: ran
+  labels:
+    app: srs-stack-du1
+spec:
+  serviceName: srs-stack-du1
+  selector:
+    matchLabels:
+      app: srs-stack-du1
+  template:
+    metadata:
+      labels:
+        app: srs-stack-du1
+    spec:
+      serviceAccountName: srs-service-account
+      automountServiceAccountToken: true
+      nodeSelector:
+        kubernetes.io/hostname: k8s-worker6
+      terminationGracePeriodSeconds: 0
+      volumes:
+        - name: dshm
+          hostPath: { path: /dev/shm }
+        - name: hugepage
+          hostPath: { path: /dev/hugepages }
+        - name: sys
+          hostPath: { path: /sys }
+        - name: dev
+          hostPath: { path: /dev }
+        - name: varjbpf
+          hostPath:
+            path: "/tmp/jbpf"
+        - name: codelets
+          hostPath:
+            path: "/home/netsys/jrtc-apps-c5g/codelets"
+        - name: du-config-volume
+          configMap:
+            name: srs-gnb-cm-du1
+        - name: jrtc-config
+          configMap:
+            name: jrtc-config
+
+      containers:
+        - name: troubleshooter
+          image: praqma/network-multitool
+          command: ["/bin/sh","-c","--"]
+          args: ["while true; do sleep 30; done;"]
+        - name: udpforwarder
+          image: ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.04-latest
+          imagePullPolicy: Always
+          env:
+            - name: LISTEN_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: LISTEN_PORT
+              value: "30502"
+            - name: FORWARD_IP
+              value: jrtc-udp-input-du1.ran.svc.cluster.local
+            - name: FORWARD_PORT
+              value: "30502"
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+
+        # Role container (monolithic keeps 'du' name)
+        - name: du
+          image: ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.04-latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev/
+            - name: varjbpf
+              mountPath: "/tmp/jbpf"
+            - name: codelets
+              mountPath: /codelets
+            - name: du-config-volume
+              mountPath: /du-config
+              readOnly: true
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          env:
+            - name: ROLE
+              value: "DU"
+            - name: DEBUG_MODE
+              value: "true"
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              cpu: 5
+              memory: 20Gi
+              hugepages-1Gi: 4Gi
+            requests:
+              cpu: 5
+              memory: 20Gi
+              hugepages-1Gi: 4Gi
+
+        - name: srs-gnb-proxy
+          image: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.04-latest
+          imagePullPolicy: Always
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          volumeMounts:
+            - name: varjbpf
+              mountPath: "/tmp/jbpf"
+            - name: codelets
+              mountPath: /codelets
+          env:
+            - name: JBPF_CODELETS
+              value: "/codelets"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 500Mi
+            requests:
+              cpu: 500m
+              memory: 500Mi
+
+        - name: jrtc
+          image: ghcr.io/microsoft/jrt-controller/jrt-controller-azurelinux:latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: jrtc-config
+              mountPath: /jrtc-config
+            - name: varjbpf
+              mountPath: "/tmp/jbpf"
+            - name: codelets
+              mountPath: /codelets
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          securityContext:
+            privileged: true
+          env:
+            - name: HOSTNAME
+              value: "k8s-master"
+            - name: JRTC_PATH
+              value: "/jrtc"
+            - name: JRTC_APP_PATH
+              value: "/jrtc/out/lib/"
+            - name: LD_LIBRARY_PATH
+              value: "$LD_LIBRARY_PATH:/jrtc/out/lib/"
+            - name: JRTC_JSON_INPUT_PORT
+              value: "30502"
+        - name: jrtc-decoder
+          image: ghcr.io/microsoft/jrt-controller/jrt-controller-azurelinux:latest
+          imagePullPolicy: Always
+          command: ["/bin/sh","-c"]
+          args: ["sleep 99999999d"]
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: hugepage
+              mountPath: /dev/hugepages
+            - name: sys
+              mountPath: /sys/
+            - name: dev
+              mountPath: /dev
+            - name: varjbpf
+              mountPath: "/tmp/jbpf"

@@ -1,9 +1,11 @@
-
+{{- /* Only render SR-IOV NADs if SR-IOV is enabled */ -}}
+{{- if .Values.sriov.enabled }}
 ---
 apiVersion: "k8s.cni.cncf.io/v1"
 kind: NetworkAttachmentDefinition
 metadata:
   name: srs-sriov-cu
+  namespace: {{ $.Release.Namespace }}
   annotations:
     k8s.v1.cni.cncf.io/resourceName: "{{ .Values.sriov.resourceName }}"
 spec:
@@ -37,13 +39,14 @@ spec:
   
 
 # And for each cell
-{{range $idx_c, $cell := $values.cells}}
+{{- range $idx_c, $cell := $values.cells }}
 
 ---
 apiVersion: "k8s.cni.cncf.io/v1"
 kind: NetworkAttachmentDefinition
 metadata:
   name: "srs-{{ $ran_name }}-sriov-fh-instance-{{ $idx_c }}"
+  namespace: {{ $.Release.Namespace }}
   annotations:
     k8s.v1.cni.cncf.io/resourceName: {{ $cell.ruDPDKResource }}
 spec:
@@ -56,7 +59,6 @@ spec:
       "mac": "{{ $cell.ruLocalMAC }}"
     }
 
-{{end}}
 {{- end }}
-
-
+{{- end }}
+{{- end }}  {{/* end if sriov.enabled */}}

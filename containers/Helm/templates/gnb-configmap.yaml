@@ -1,0 +1,16 @@
+{{- /* Only render if duConfigs is non-empty */}}
+{{- if and .Values.duConfigs (gt (len .Values.duConfigs) 0) }}
+{{- range $ran_name, $values := .Values.duConfigs }}
+{{- if $ran_name }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: srs-gnb-cm-{{ $ran_name }}
+  namespace: {{ $.Release.Namespace }}
+data:
+  # Store the entire values tree as JSON in one key; avoids indentation pitfalls
+  config.json: {{ $.Values | toJson | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
