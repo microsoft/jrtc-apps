@@ -49,6 +49,6 @@ RUN cmake .. -DENABLE_ZEROMQ=ON -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF -DC
 RUN make -j VERBOSE=1
 RUN make install
 
-WORKDIR /out
+WORKDIR /opt/Scripts
 
 ENTRYPOINT ["/bin/bash"]
