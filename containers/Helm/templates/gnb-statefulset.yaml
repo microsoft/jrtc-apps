@@ -163,7 +163,12 @@ spec:
       {{- end }}
 
       - name: gnb
+        {{- if  $.Values.zmq.enabled }}
+        image: "{{ $.Values.image.srs_jbpf_zmq }}"
+        {{- else }}
         image: "{{ $.Values.image.srs_jbpf }}"
+        {{- end }}
+
         imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
         volumeMounts:
         - name: dshm
@@ -336,14 +341,11 @@ spec:
     app: srs-gnb-{{ $ran_name }}
   type: ClusterIP
   ports:
-    - name: zmq-tx
+    - name: zmq
       protocol: TCP
-      port: {{ add $.Values.zmq.tx_port_base $ran_cnt }}
-      targetPort: {{ add $.Values.zmq.tx_port_base $ran_cnt }}
-    - name: zmq-rx
-      protocol: TCP
-      port: {{ add $.Values.zmq.rx_port_base $ran_cnt }}
-      targetPort: {{ add $.Values.zmq.rx_port_base $ran_cnt }}
+      port: {{ add $.Values.zmq.ran_port_base $ran_cnt }}
+      targetPort: {{ add $.Values.zmq.ran_port_base $ran_cnt }}
+
 
 
 {{ $ran_cnt = add1 $ran_cnt }}

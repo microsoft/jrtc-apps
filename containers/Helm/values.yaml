@@ -4,7 +4,9 @@
 
 image:
   srs_jbpf: ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.04-latest
+  srs_jbpf_zmq: ghcr.io/microsoft/jrtc-apps/srs-jbpf-zmq:srsran25.04-latest
   srs_jbpf_proxy: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.04-latest
+  srs_ue: ghcr.io/microsoft/jrtc-apps/srs-ue:srsran25.04-latest
   pullPolicy: Always
 
 HOSTNAME: ""
@@ -53,6 +55,16 @@ resources:
       cpu: 1
       memory: 2Gi
       hugepages2Gi: 4Gi
+  ue:
+    limits:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
+
 
 
 duConfigs:
@@ -241,9 +253,9 @@ dmimo:
 
 
 zmq:
-  enabled: False
-  tx_port_base: 5000
-  rx_port_base: 5001
+  enabled: True
+  ran_port_base: 2000
+  ue_port_base: 3000
 
 ue:
   replicas: 1

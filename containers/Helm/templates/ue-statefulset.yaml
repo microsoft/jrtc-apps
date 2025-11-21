@@ -1,3 +1,5 @@
+{{- if  $.Values.zmq.enabled }}
+
 {{- $ue_cnt := 0 | int }}
 {{- range $ran_name, $values := .Values.duConfigs }}
 
@@ -9,10 +11,10 @@ metadata:
 data:
   ue_zmq.conf: |-
     [ue]
-    imsi = "{{ index $.Values.ue imsi | default "001010000000001" }}"
+    imsi = "{{ index $.Values.ue.imsi | default "001010000000001" }}"
     device_driver = "zmq"
     # UE connects to gNB via its ZMQ service
-    device_args = "tx_port=tcp://srs-gnb-{{ $ran_name }}-zmq.{{ $.Release.Namespace }}.svc.cluster.local:{{ add $.Values.zmq.tx_port_base $ue_cnt }},rx_port=tcp://srs-gnb-{{ $ran_name }}-zmq.{{ $.Release.Namespace }}.svc.cluster.local:{{ add $.Values.zmq.rx_port_base $ue_cnt }},id=ue{{ $ue_cnt }}"
+    device_args = "tx_port=tcp://srs-gnb-{{ $ran_name }}-zmq.{{ $.Release.Namespace }}.svc.cluster.local:{{ add $.Values.zmq.ran_port_base $ue_cnt }},rx_port=tcp://srs-gnb-{{ $ran_name }}-zmq.{{ $.Release.Namespace }}.svc.cluster.local:{{ add $.Values.zmq.ue_port_base $ue_cnt }},id=ue{{ $ue_cnt }}"
     tun_name = "tun_srsue"
     profile_apn = "{{ $.Values.ue.apn | default "internet" }}"
     log_level = "{{ $.Values.ue.log_level | default "DEBUG" }}"
@@ -26,7 +28,7 @@ metadata:
     app: srs-ue-{{ $ran_name }}
 spec:
   serviceName: srs-service-ue-{{ $ran_name }}
-  replicas: {{ .Values.ue.replicas | default 1 }}
+  replicas: {{ $.Values.ue.replicas | default 1 }}
   selector:
     matchLabels:
       app: srs-ue-{{ $ran_name }}
@@ -34,8 +36,8 @@ spec:
     metadata:
       labels:
         app: srs-ue-{{ $ran_name }}
-      annotations:
-        k8s.v1.cni.cncf.io/networks: '[ { "name": "srs-sriov-ue" } ]'
+      # annotations:
+      #   k8s.v1.cni.cncf.io/networks: '[ { "name": "srs-sriov-ue" } ]'
     spec:
       serviceAccountName: srs-service-account
       terminationGracePeriodSeconds: 0
@@ -49,28 +51,48 @@ spec:
 
       containers:
       - name: ue
-        image: "{{ $.Values.image.srs_ue | default $.Values.image.srs_jbpf }}"
+        image: "{{ $.Values.image.srs_ue }}"
         imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
         volumeMounts:
         - name: ue-config
           mountPath: /etc/srs/ue_zmq.conf
           subPath: ue_zmq.conf
-
         command: ["/bin/sh", "-c"]
         args:
-          {{- if $.Values.debug_mode.enabled }}
+        {{- if $.Values.debug_mode.enabled }}
           - "sleep 99999999d"
-          {{- else }}
-          - "srsue /etc/srs/ue_zmq.conf"
-          {{- end }}
+        {{- else }}
+          - |
+            echo "Waiting for gNB ZMQ ports to become available..."
+            until nc -z srs-gnb-{{ $ran_name }}-zmq.{{ $.Release.Namespace }}.svc.cluster.local {{ $.Values.zmq.tx_port_base }} && \
+                  nc -z srs-gnb-{{ $ran_name }}-zmq.{{ $.Release.Namespace }}.svc.cluster.local {{ $.Values.zmq.rx_port_base }}; do
+              echo "gNB not ready yet, sleeping 2s..."
+              sleep 2
+            done
+            echo "gNB ready, starting srsUE"
+            srsue /etc/srs/ue_zmq.conf
+        {{- end }}
+
+        # command: ["/bin/sh", "-c"]
+        # args:
+        #   {{- if $.Values.debug_mode.enabled }}
+        #   - "sleep 99999999d"
+        #   {{- else }}
+        #   - "srsue /etc/srs/ue_zmq.conf"
+        #   {{- end }}
 
         securityContext:
-          privileged: false
+          privileged: true
+          seccompProfile:
+            type: Unconfined          
           capabilities:
             add:
               - NET_ADMIN
               - NET_RAW
               - SYS_TIME
+              - SYS_ADMIN
+              - IPC_LOCK
+              - SYS_NICE              
         tty: true
         stdin: true
 
@@ -83,11 +105,31 @@ spec:
             memory: {{ $.Values.resources.ue.limits.memory | default "1Gi" }}
 
 ---
-# Optional UE service for visibility
+# ZMQ service for gNB – used by UE to connect (tx/rx)
+# DNS: srs-gnb-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
 apiVersion: v1
 kind: Service
 metadata:
   name: srs-ue-{{ $ran_name }}-zmq
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: srs-ue-{{ $ran_name }}
+spec:
+  selector:
+    app: srs-ue-{{ $ran_name }}
+  type: ClusterIP
+  ports:
+    - name: zmq
+      protocol: TCP
+      port: {{ $.Values.zmq.ue_port_base }}
+      targetPort: {{ $.Values.zmq.ue_port_base }}
+
+---
+# Optional UE service for visibility
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-ue-{{ $ran_name }}-zmq-ctl
   namespace: {{ $.Release.Namespace }}
   labels:
     app: srs-ue-{{ $ran_name }}
@@ -102,4 +144,6 @@ spec:
       targetPort: 3100
 
 {{ $ue_cnt = add1 $ue_cnt }}
+{{- end }}
+
 {{- end }}
