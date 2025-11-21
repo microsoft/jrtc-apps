@@ -15,6 +15,9 @@ RUN cmake ../ -DENABLE_RF_PLUGINS=OFF -DCMAKE_C_COMPILER=/usr/local/gcc-11/bin/g
 RUN make -j`nproc`
 RUN make install
 
+RUN tdnf install -y iproute iputils iperf3 ipcalc
+
 WORKDIR /usr/local/bin
+COPY srs_ue/set_ue_routes.sh .
 
 ENTRYPOINT ["/bin/bash"]
