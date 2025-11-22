@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
+
 # Function to set up 5G UE TUN routing automatically
 setup_ue_routing() {
     local TUN_IF="tun_srsue"
