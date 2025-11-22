@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
 # GRC_run.sh
 
 export GNB_ADDR=127.0.0.1

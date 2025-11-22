@@ -15,9 +15,13 @@ RUN cmake ../ -DENABLE_RF_PLUGINS=OFF -DCMAKE_C_COMPILER=/usr/local/gcc-11/bin/g
 RUN make -j`nproc`
 RUN make install
 
-RUN tdnf install -y iproute iputils iperf3 ipcalc
+RUN tdnf install -y iproute iputils iperf3 ipcalc gettext
 
 WORKDIR /usr/local/bin
-COPY srs_ue/set_ue_routes.sh .
+COPY srs_ue/run.sh .
+COPY srs_ue/set_ue_ip_routes.sh .
+COPY srs_ue/ue_zmq.conf.template .
+COPY srs_ue/run.sh .
+RUN chmod +x run.sh set_ue_ip_routes.sh
 
-ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["./run.sh"]

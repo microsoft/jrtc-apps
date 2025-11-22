@@ -1,6 +1,7 @@
 #!/bin/bash
 
-#BASE_IMAGE_TAG=latest
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
 
 CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 source $(dirname $(dirname "$CURRENT_DIR"))/set_vars.sh
@@ -20,8 +21,7 @@ Usage()
 #while getopts "b:s:c" option; do
 while getopts "s:c" option; do
 	case $option in
-#		b) # Set image tag
-#			BASE_IMAGE_TAG="$OPTARG";;
+
 		s) # Set image tag
 			SRSRAN_IMAGE_TAG="$OPTARG";;
 		c) # Set image tag

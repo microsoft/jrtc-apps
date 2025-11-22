@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
 BASE_IMAGE_TAG=latest
 CACHE_FLAG=
 
