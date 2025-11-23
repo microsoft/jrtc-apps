@@ -14,8 +14,8 @@ RUN mkdir -p /root/.gnuradio/prefs
 RUN echo "DEFAULT" > /root/.gnuradio/prefs/vmcircbuf_default_factory
 
 # Copy your generated Python file
-COPY GRC_multi_ue_headless.py /app/GRC_multi_ue_headless.py
-COPY GRC_run.sh /app/GRC_run.sh
+COPY srs_grc/GRC_multi_ue_headless.py /app/GRC_multi_ue_headless.py
+COPY srs_grc/GRC_run.sh /app/GRC_run.sh
 
 # Run automatically
 ENTRYPOINT ["/app/GRC_run.sh"]

@@ -28,7 +28,7 @@
 
 import sys
 import signal
-from argparse import ArgumentParser
+import argparse
 from gnuradio import blocks, gr, zeromq
 
 class multi_ue_scenario(gr.top_block):
@@ -46,12 +46,11 @@ class multi_ue_scenario(gr.top_block):
                  zmq_hwm=-1):
 
         print("[INFO] Initializing multi_ue_scenario...", flush=True)
+        print(f"[INFO] gnb addr {gnb_addr} gnb_tx_port {gnb_tx_port} gnb_rx_port {gnb_rx_port}", flush=True)
+        print(f"[INFO] ue_addrs {ue_addrs} ue_tx_ports {ue_tx_ports} ue_rx_ports {ue_rx_ports} ue_pathloss {ue_pathloss}", flush=True)
 
         # assert that the confif fields have the same lengths
         num_ues = len(ue_addrs)
-        assert len(ue_tx_ports) == num_ues, "ue_tx_ports length must match ue_addrs"
-        assert len(ue_rx_ports) == num_ues, "ue_rx_ports length must match ue_addrs"
-        assert len(ue_pathloss) == num_ues, "ue_pathloss length must match ue_addrs"
 
         gr.top_block.__init__(self, "srsRAN_multi_UE", catch_exceptions=True)
 
@@ -62,10 +61,8 @@ class multi_ue_scenario(gr.top_block):
 
         print(f"[INFO] Sample rate: {self.samp_rate}, Slowdown: {self.slow_down_ratio}", flush=True)
 
-        if len(ue_pathloss) != 3:
-            raise ValueError("ue_pathloss must have 3 values")
-        self.ue1_path_loss_db, self.ue2_path_loss_db, self.ue3_path_loss_db = map(float, ue_pathloss)
-        print(f"[INFO] UE pathloss: {self.ue1_path_loss_db}, {self.ue2_path_loss_db}, {self.ue3_path_loss_db}", flush=True)
+        self.ue_path_loss_db = list(map(float, ue_pathloss))
+        print(f"[INFO] UE pathloss list: {self.ue_path_loss_db}")
 
         #
         # Ports Used in the GNU-Radio flow graph
@@ -235,25 +232,57 @@ class multi_ue_scenario(gr.top_block):
 
 
 def parse_args():
-    p = ArgumentParser()
+
+    # Helper to parse space-separated lists from a single string
+    def parse_space_list(s, cast=str):
+        return [cast(x) for x in s.split()]
+
+    # Argparse
+    p = argparse.ArgumentParser()
     p.add_argument('--gnb-addr', default='127.0.0.1', help='gNB host/IP')
     p.add_argument('--gnb-tx-port', type=int, default=2000, help='gNB TX port')
     p.add_argument('--gnb-rx-port', type=int, default=2001, help='gNB RX port')
-    p.add_argument('--ue-addrs', nargs=3, default=['127.0.0.1']*3, help='UE addresses')
-    p.add_argument('--ue-tx-ports', nargs=3, type=int, default=[2101,2201,2301], help='UE TX ports')
-    p.add_argument('--ue-rx-ports', nargs=3, type=int, default=[2100,2200,2300], help='UE RX ports')
-    p.add_argument('--ue-pathloss', nargs=3, type=float, default=[0,10,20], help='UE pathloss dB')
+
+    # Keep as single string; will parse manually
+    p.add_argument('--ue-addrs', type=str, default='127.0.0.1', help='UE addresses, space-separated')
+    p.add_argument('--ue-tx-ports', type=str, default='2101', help='UE TX ports, space-separated')
+    p.add_argument('--ue-rx-ports', type=str, default='2100', help='UE RX ports, space-separated')
+    p.add_argument('--ue-pathloss', type=str, default='0', help='UE pathloss dB, space-separated')
+
+    # Other arguments
     p.add_argument('--slowdown', type=float, default=4.0, help='Slow down ratio')
     p.add_argument('--samp-rate', type=float, default=11520000, help='Sample rate')
     p.add_argument('--zmq-timeout', type=int, default=100, help='ZMQ timeout ms')
     p.add_argument('--zmq-hwm', type=int, default=-1, help='ZMQ HWM')
+
+    # Parse arguments
     args = p.parse_args()
-    print(f"[INFO] Parsed arguments: {args}", flush=True)
+
+    # --- Convert space-separated strings into lists ---
+    args.ue_addrs    = parse_space_list(args.ue_addrs, str)
+    args.ue_tx_ports = parse_space_list(args.ue_tx_ports, int)
+    args.ue_rx_ports = parse_space_list(args.ue_rx_ports, int)
+    args.ue_pathloss = parse_space_list(args.ue_pathloss, float)
+
+    # --- Validate lengths ---
+    lens = {
+        "UE_ADDRS": len(args.ue_addrs),
+        "UE_TX_PORTS": len(args.ue_tx_ports),
+        "UE_RX_PORTS": len(args.ue_rx_ports),
+        "UE_PATHLOSS": len(args.ue_pathloss)
+    }
+    if len(set(lens.values())) != 1:
+        raise ValueError(f"UE list length mismatch: {lens}. All UE lists must have the same number of entries.")
+
+    num_ues = len(args.ue_addrs)
+    print(f"[INFO] Using {num_ues} UE(s)")
+
     return args
 
 
 def main():
     args = parse_args()
+
     tb = multi_ue_scenario(
         gnb_addr=args.gnb_addr,
         gnb_tx_port=args.gnb_tx_port,
