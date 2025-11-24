@@ -7,6 +7,7 @@ image:
   srs_jbpf_zmq: ghcr.io/microsoft/jrtc-apps/srs-jbpf-zmq:srsran25.04-latest
   srs_jbpf_proxy: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.04-latest
   srs_ue: ghcr.io/microsoft/jrtc-apps/srs-ue:srsran25.04-latest
+  srs_grc: ghcr.io/microsoft/jrtc-apps/grc:latest
   pullPolicy: Always
 
 HOSTNAME: ""
@@ -64,7 +65,15 @@ resources:
       cpu: 1
       memory: 1Gi
       hugepages1Gi: 1Gi
-
+  grc:
+    limits:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
 
 
 duConfigs:
@@ -251,11 +260,34 @@ dmimo:
           ruDPDKResource: "intel.com/intel_sriov_dpdk_ru9"
           bitmask: 204
 
-
 zmq:
   enabled: True
-  ran_port_base: 2000
-  ue_port_base: 3000
+  # zmq map
+  #                gNB    ue1     ue2     ue3
+  # TX             2000   2101    2201    2301
+  # Rx             2001   2100    2200    2300
+  #
+  # Only 2 UEs currently configured.  Add more if CPU can support
+  #
+  ran:
+    tx_port: 2000
+    rx_port: 2001
+  ues:
+    ue1:
+      tx_port: 2101
+      rx_port: 2100
+      imsi: "001010123456780"
+      imei: "353490069873310"
+      apn: "internet"
+      pathloss: 0
+    ue2:
+      tx_port: 2201
+      rx_port: 2200
+      imsi: "001010123456781"
+      imei: "353490069873311"
+      apn: "internet2"
+      pathloss: 10
+
 
 ue:
   replicas: 1
