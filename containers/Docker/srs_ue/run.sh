@@ -3,7 +3,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-required_env_vars="TX_ADDR TX_PORT RX_ADDR RX_PORT IMSI IMEI APN"
+required_env_vars="TX_PORT RX_ADDR RX_PORT IMSI IMEI APN"
 for env_var in $required_env_vars; do
     if [[ -z ${!env_var} ]]; then
         echo "ERROR:  $env_var is undefined !! "
@@ -11,7 +11,6 @@ for env_var in $required_env_vars; do
     fi
 done
 
-echo TX_ADDR $TX_ADDR
 echo TX_PORT $TX_PORT
 echo RX_ADDR $RX_ADDR
 echo RX_PORT $RX_PORT

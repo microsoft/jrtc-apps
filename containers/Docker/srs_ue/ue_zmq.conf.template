@@ -9,7 +9,7 @@ srate = 11.52e6
 nof_antennas = 1
 
 device_name = zmq
-device_args = tx_port=tcp://$TX_ADDR:$TX_PORT,rx_port=tcp://$RX_ADDR:$RX_PORT,base_srate=11.52e6
+device_args = tx_port=tcp://0.0.0.0:$TX_PORT,rx_port=tcp://$RX_ADDR:$RX_PORT,base_srate=11.52e6
 
 [rat.eutra]
 # Disable LTE

@@ -94,8 +94,8 @@ class multi_ue_scenario(gr.top_block):
 
         print(f"[INFO] Creating gNB dl source -> {gnb_addr}:{gnb_tx_port}", flush=True)
         self.gnb_dl_source = zeromq.req_source(gr.sizeof_gr_complex, 1, f"tcp://{gnb_addr}:{gnb_tx_port}", zmq_timeout, False, zmq_hwm)
-        print(f"[INFO] Creating gNB ul sink -> {gnb_addr}:{gnb_rx_port}", flush=True)
-        self.gnb_ul_sink = zeromq.rep_sink(gr.sizeof_gr_complex, 1, f"tcp://{gnb_addr}:{gnb_rx_port}", zmq_timeout, False, zmq_hwm)
+        print(f"[INFO] Creating gNB ul sink -> 0.0.0.0:{gnb_rx_port}", flush=True)
+        self.gnb_ul_sink = zeromq.rep_sink(gr.sizeof_gr_complex, 1, f"tcp://0.0.0.0:{gnb_rx_port}", zmq_timeout, False, zmq_hwm)
 
         self.ue_ul_sources = []
         for i, (addr, tx_port) in enumerate(zip(ue_addrs, ue_tx_ports)):
@@ -104,10 +104,10 @@ class multi_ue_scenario(gr.top_block):
                 zeromq.req_source(gr.sizeof_gr_complex, 1, f"tcp://{addr}:{tx_port}", zmq_timeout, False, zmq_hwm)
             )
         self.ue_dl_sinks = []
-        for i, (addr, rx_port) in enumerate(zip(ue_addrs, ue_rx_ports)):
-            print(f"[INFO] Creating UE{i+1} dl sink -> {addr}:{rx_port}", flush=True)
+        for i, rx_port in enumerate(ue_rx_ports):
+            print(f"[INFO] Creating UE{i+1} dl sink -> 0.0.0.0:{rx_port}", flush=True)
             self.ue_dl_sinks.append(
-                zeromq.rep_sink(gr.sizeof_gr_complex, 1, f"tcp://{addr}:{rx_port}", zmq_timeout, False, zmq_hwm)
+                zeromq.rep_sink(gr.sizeof_gr_complex, 1, f"tcp://0.0.0.0:{rx_port}", zmq_timeout, False, zmq_hwm)
             )
 
         # Throttle (after summing UE sources)
