@@ -262,6 +262,10 @@ dmimo:
 
 zmq:
   enabled: True
+  cell:
+    cellID: 1000
+    physicalCellID: 100
+    ruBandwidth: 10
   # zmq map
   #                gNB    ue1     ue2     ue3
   # TX             2000   2101    2201    2301
@@ -287,13 +291,6 @@ zmq:
       imei: "353490069873311"
       apn: "internet2"
       pathloss: 10
-
-
-ue:
-  replicas: 1
-  apn: internet
-  imsi: "001010000000001"
-  log_level: DEBUG
 
 
 # If enabled, the chart doesn't start executables in the containers, 

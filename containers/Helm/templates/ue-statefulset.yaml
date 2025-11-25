@@ -11,7 +11,6 @@ metadata:
     app: srs-du-{{ $ran_name }}-grc
 spec:
   serviceName: srs-service-du-{{ $ran_name }}-grc
-  replicas: {{ $.Values.ue.replicas | default 1 }}
   selector:
     matchLabels:
       app:  srs-du-{{ $ran_name }}-grc
@@ -125,7 +124,6 @@ metadata:
     app: srs-du-{{ $ran_name }}-{{ $ue_name }}
 spec:
   serviceName: srs-service-du-{{ $ran_name }}-{{ $ue_name }}
-  replicas: {{ $.Values.ue.replicas | default 1 }}
   selector:
     matchLabels:
       app:  srs-du-{{ $ran_name }}-{{ $ue_name }}
