@@ -6,7 +6,7 @@ FROM ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRS_JBPF_IMAGE_TAG} AS builder
 
 # Install build dependencies
 RUN tdnf install -y \
-      git autoconf automake libtool pkg-config libuuid-devel make gcc cpp && \
+      git autoconf automake libtool pkg-config libuuid-devel make gcc cpp gettext && \
     tdnf clean all
 
 WORKDIR /zmq
