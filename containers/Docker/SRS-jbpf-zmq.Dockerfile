@@ -6,7 +6,7 @@ FROM ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRS_JBPF_IMAGE_TAG} AS builder
 
 # Install build dependencies
 RUN tdnf install -y \
-      git autoconf automake libtool pkg-config libuuid-devel make gcc cpp gettext && \
+      git autoconf automake libtool pkg-config libuuid-devel make gcc cpp && \
     tdnf clean all
 
 WORKDIR /zmq
@@ -36,6 +36,10 @@ FROM ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRS_JBPF_IMAGE_TAG}
 
 # Copy only installed libs/binaries from builder
 COPY --from=builder /usr/local /usr/local
+
+# Install build dependencies
+RUN tdnf install -y gettext && \
+    tdnf clean all
 
 # Update dynamic linker cache
 RUN ldconfig
