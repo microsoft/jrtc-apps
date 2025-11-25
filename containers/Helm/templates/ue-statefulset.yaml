@@ -6,18 +6,18 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: srs-du-{{ $ran_name }}-grc
+  name: srs-grc-{{ $ran_name }}
   labels:
-    app: srs-du-{{ $ran_name }}-grc
+    app: srs-grc-{{ $ran_name }}
 spec:
   serviceName: srs-service-du-{{ $ran_name }}-grc
   selector:
     matchLabels:
-      app:  srs-du-{{ $ran_name }}-grc
+      app:  srs-grc-{{ $ran_name }}
   template:
     metadata:
       labels:
-        app:  srs-du-{{ $ran_name }}-grc
+        app:  srs-grc-{{ $ran_name }}
       # annotations:
       #   k8s.v1.cni.cncf.io/networks: '[ { "name": "srs-sriov-ue" } ]'
     spec:
@@ -47,7 +47,7 @@ spec:
           - name: GNB_RX_PORT
             value: "{{ $.Values.zmq.ran.rx_port}}"
           - name: UE_ADDRS
-            value: "{{- range $ue_name, $ue := $.Values.zmq.ues -}}{{ if $ue_name }} {{ end }}srs-du-{{ $ran_name }}-zmq-{{ $ue_name }}.ran.svc.cluster.local{{- end }}"
+            value: "{{- range $ue_name, $ue := $.Values.zmq.ues -}}{{ if $ue_name }} {{ end }}srs-{{ $ue_name }}-{{ $ran_name }}-zmq.ran.svc.cluster.local{{- end }}"
           - name: UE_TX_PORTS
             value: "{{- range $ue_name, $ue := $.Values.zmq.ues -}}{{ if $ue_name }} {{ end }}{{ $ue.tx_port }}{{- end }}"
           - name: UE_RX_PORTS
@@ -80,33 +80,33 @@ spec:
 
 
 ---
-
+# DNS: srs-grc-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
 apiVersion: v1
 kind: Service
 metadata:
-  name: srs-du-{{ $ran_name }}-zmq-grc
+  name: srs-grc-{{ $ran_name }}-zmq
   namespace: {{ $.Release.Namespace }}
   labels:
-    app:  srs-du-{{ $ran_name }}-grc
+    app: srs-grc-{{ $ran_name }}
 spec:
   selector:
-    app:  srs-du-{{ $ran_name }}-grc
+    app: srs-grc-{{ $ran_name }}
   type: ClusterIP
   ports:
-    - name: grc-gnb-ul
+    - name: grc-gnb-zmq-rx
       protocol: TCP
       port: {{ $.Values.zmq.ran.rx_port}}
       targetPort: {{ $.Values.zmq.ran.rx_port}}
-    - name: grc-gnb-dl
+    - name: grc-gnb-zmq-tx
       protocol: TCP
       port: {{ $.Values.zmq.ran.tx_port}}
       targetPort: {{ $.Values.zmq.ran.tx_port}}
 {{- range $ue_name, $ue_values := $.Values.zmq.ues }}  
-    - name: grc-ue-ul-{{ $ue_name }}
+    - name: grc-{{ $ue_name }}-zmq-tx
       protocol: TCP
       port: {{ $ue_values.tx_port }}
       targetPort: {{ $ue_values.tx_port }}
-    - name: grc-ue-dl-{{ $ue_name }}
+    - name: grc-{{ $ue_name }}-zmq-rx
       protocol: TCP
       port: {{ $ue_values.rx_port }}
       targetPort: {{ $ue_values.rx_port }}
@@ -119,18 +119,18 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: srs-du-{{ $ran_name }}-{{ $ue_name }}
+  name: srs-{{ $ue_name }}-{{ $ran_name }}
   labels:
-    app: srs-du-{{ $ran_name }}-{{ $ue_name }}
+    app: srs-{{ $ue_name }}-{{ $ran_name }}
 spec:
   serviceName: srs-service-du-{{ $ran_name }}-{{ $ue_name }}
   selector:
     matchLabels:
-      app:  srs-du-{{ $ran_name }}-{{ $ue_name }}
+      app:  srs-{{ $ue_name }}-{{ $ran_name }}
   template:
     metadata:
       labels:
-        app:  srs-du-{{ $ran_name }}-{{ $ue_name }}
+        app:  srs-{{ $ue_name }}-{{ $ran_name }}
       # annotations:
       #   k8s.v1.cni.cncf.io/networks: '[ { "name": "srs-sriov-ue" } ]'
     spec:
@@ -156,7 +156,7 @@ spec:
           - name: TX_PORT
             value: "{{ $ue_values.tx_port }}"
           - name: RX_ADDR
-            value: "srs-du-{{ $ran_name }}-zmq-grc.ran.svc.cluster.local"
+            value: "srs-grc-{{ $ran_name }}-zmq.ran.svc.cluster.local"
           - name: RX_PORT
             value: "{{ $ue_values.rx_port }}"
           - name: IMSI
@@ -190,25 +190,24 @@ spec:
             memory: {{ $.Values.resources.ue.limits.memory | default "1Gi" }}
 
 ---
-# ZMQ service for gNB – used by UE to connect (tx/rx)
-# DNS: srs-gnb-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
+# DNS:  srs-{{ $ue_name }}-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
 apiVersion: v1
 kind: Service
 metadata:
-  name: srs-du-{{ $ran_name }}-zmq-{{ $ue_name }}
+  name: srs-{{ $ue_name }}-{{ $ran_name }}-zmq
   namespace: {{ $.Release.Namespace }}
   labels:
-    app:  srs-du-{{ $ran_name }}-{{ $ue_name }}
+    app:  srs-{{ $ue_name }}-{{ $ran_name }}
 spec:
   selector:
-    app:  srs-du-{{ $ran_name }}-{{ $ue_name }}
+    app:  srs-{{ $ue_name }}-{{ $ran_name }}
   type: ClusterIP
   ports:
-    - name: ue-ul-{{ $ue_name }}
+    - name: {{ $ue_name }}-zmq-tx
       protocol: TCP
       port: {{ $ue_values.tx_port }}
       targetPort: {{ $ue_values.tx_port }}
-    - name: ue-dl-{{ $ue_name }}
+    - name: {{ $ue_name }}-zmq-rx
       protocol: TCP
       port: {{ $ue_values.rx_port }}
       targetPort: {{ $ue_values.rx_port }}

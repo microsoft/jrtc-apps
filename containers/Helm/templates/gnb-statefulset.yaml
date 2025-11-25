@@ -210,7 +210,7 @@ spec:
           - name: ZMQ_TX_PORT
             value: "{{ $.Values.zmq.ran.tx_port }}"
           - name: ZMQ_RX_ADDR
-            value: "srs-du-{{ $ran_name }}-zmq-grc.ran.svc.cluster.local"
+            value: "srs-grc-{{ $ran_name }}-zmq.ran.svc.cluster.local"
           - name: ZMQ_RX_PORT
             value: "{{ $.Values.zmq.ran.rx_port }}"
         {{- end }}
@@ -360,11 +360,11 @@ spec:
     app: srs-gnb-{{ $ran_name }}
   type: ClusterIP
   ports:
-    - name: gnb-zmq-ul
+    - name: gnb-zmq-rx
       protocol: TCP
       port: {{ add $.Values.zmq.ran.rx_port $ran_cnt }}
       targetPort: {{ add $.Values.zmq.ran.rx_port $ran_cnt }}
-    - name: gnb-zmq-dl
+    - name: gnb-zmq-tx
       protocol: TCP
       port: {{ add $.Values.zmq.ran.tx_port $ran_cnt }}
       targetPort: {{ add $.Values.zmq.ran.tx_port $ran_cnt }}
