@@ -117,8 +117,8 @@
 
 
 import sys
-from dataclasses import dataclass, asdict, replace
-from typing import List, Tuple, Dict
+from dataclasses import dataclass, asdict, replace, field
+from typing import List, Optional, Tuple, Dict
 from enum import IntEnum
 import datetime as dt
 
@@ -229,7 +229,7 @@ class UeContext:
     ngap_ids: RanNgapUeIds = None 
     core_amf_context_index: int = None
     core_amf_info: CoreAMFInfo = None
-    drb_nssai_map: List[Tuple[int, Nssai]] = None
+    drb_nssai_map: Dict[int, Nssai] = field(default_factory=dict)
 
     def __init__(self, ran_unique_ue_id: RanUniqueUeId, du_index: UniqueIndex = None, cucp_index: UniqueIndex = None, cuup_index: UniqueIndex = None,
                  nci: int = None, tac: int = None):
@@ -242,6 +242,7 @@ class UeContext:
         self.cuup_index = cuup_index
         self.e1_bearers = []
         self.ngap_ids = None
+        self.drb_nssai_map = {}
 
     def used(self) -> bool:
         """
@@ -297,6 +298,31 @@ class UeContext:
                 break
         return bearer
 
+    def drb_nssai_map_add_update(self, drb_id: int, sst: int, sd: int):
+        """
+        Add a new DRB→NSSAI mapping, or update the existing one.
+        """
+        self.drb_nssai_map[drb_id] = Nssai(sst, sd)
+
+    def drb_nssai_map_get(self, drb_id: int) -> Optional[Nssai]:
+        """
+        Get the (sst, sd) tuple for a given DRB id, or None if not found.
+        """
+        return self.drb_nssai_map.get(drb_id, None)
+
+    def drb_nssai_map_del(self, drb_id: int) -> Optional[Nssai]:
+        """
+        Delete a DRB→NSSAI mapping by DRB ID. Returns the removed Nssai, or None if not found.
+        """
+        return self.drb_nssai_map.pop(drb_id, None)
+
+    def drb_nssai_map_items(self):
+        """
+        Return a view of all DRB→NSSAI items.
+        Useful for iteration without exposing internal dict directly.
+        """
+        return self.drb_nssai_map.items()
+
     def __str__(self):
         parts = [
             f"du_index={self.du_index}",
@@ -312,7 +338,7 @@ class UeContext:
             f"core_amf_info={self.core_amf_info}",
         ]
 
-        if self.drb_nssai_map is not None:
+        if self.drb_nssai_map:
             parts.append(f"drb_nssai_map={self.drb_nssai_map}")
 
         return "UEContext(" + ", ".join(parts) + ")"
@@ -330,6 +356,10 @@ class UeContext:
         # remove e1_beaerss if it is empty
         if "e1_bearers" in d and len(d["e1_bearers"]) == 0:
             d.pop("e1_bearers")
+
+        # Remove drb_nssai_map if it is empty
+        if "drb_nssai_map" in d and len(d["drb_nssai_map"]) == 0:
+            d.pop("drb_nssai_map")
 
         return d
 
@@ -1596,7 +1626,6 @@ if __name__ == "__main__":
     ue_id = s.getid_by_du_index(du1_src, 0)
     assert ue_id == 1
     ue = s.getue_by_id(ue_id)
-    print(ue)
     assert ue is not None and ue.du_index == UniqueIndex("du1", 0) \
         and ue.cucp_index is None and ue.cuup_index is None \
         and ue.ran_unique_ue_id==RanUniqueUeId(plmn=101, pci=401, crnti=20000) and ue.nci==201 and ue.tac==12
@@ -2957,6 +2986,93 @@ if __name__ == "__main__":
     num_amf_contexts_disassociated_with_ue = sum(1 for v in s.amf_contexts.values() if v[2] is not None)
     assert len(s.amf_contexts) == 0
 
+    print("#############################################################################")
+    print("# Test Nssap mappings")
+    s = UeContextsMap(dbg=dbg)
+
+    plmn = 101
+    pci =  400
+    crnti = 20000
+    du_src = 'du1'
+    du_index = 100
+    tac = 12
+    nci = 201
+    cucp_src = 'cucp1'
+    cucp_index = 200
+    cuup_src = 'cuup1'
+    cuup_index = 1400
+    gnb_cucp_ue_e1ap_id = 2000
+    gnb_cuup_ue_e1ap_id = 12000
+
+    
+    s.hook_du_ue_ctx_creation(  du_src, 
+                                du_index,
+                                plmn,
+                                pci,
+                                crnti,
+                                tac,
+                                nci)
+    s.hook_cucp_uemgr_ue_add(   cucp_src, 
+                                cucp_index,
+                                plmn,
+                                pci,
+                                crnti)
+    s.hook_e1_cucp_bearer_context_setup(    cucp_src, 
+                                            cucp_index,   
+                                            cucp_ue_e1ap_id) 
+    s.hook_e1_cuup_bearer_context_setup(    cuup_src,
+                                            cuup_index,
+                                            cucp_ue_e1ap_id,
+                                            cuup_ue_e1ap_id,
+                                            True)  # succees
+
+    uectx = s.getue_by_id(0)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))]}
+
+    drb1 = 1
+    drb1_sst = 162
+    drb1_sd = 1
+    uectx.drb_nssai_map_add_update(drb1, drb1_sst, drb1_sd)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))], 'drb_nssai_map': {1: {'sst': 162, 'sd': 1}}}
+
+    # update drb1 to new Nssai
+    drb1 = 1
+    drb1_sst = 163
+    drb1_sd = 1
+    uectx.drb_nssai_map_add_update(drb1, drb1_sst, drb1_sd)
+    # add drb2
+    drb2 = 2
+    drb2_sst = 164
+    drb2_sd = 1
+    uectx.drb_nssai_map_add_update(drb2, drb2_sst, drb2_sd)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))], 'drb_nssai_map': {1: {'sst': 163, 'sd': 1}, 2: {'sst': 164, 'sd': 1}}}
+    
+    nssai = uectx.drb_nssai_map_get(5)
+    assert nssai is None
+
+    nssai = uectx.drb_nssai_map_get(drb1)
+    assert nssai == Nssai(sst=drb1_sst, sd=drb1_sd)
+
+    nssai = uectx.drb_nssai_map_get(drb2)
+    assert nssai == Nssai(sst=drb2_sst, sd=drb2_sd)
+
+    assert dict(uectx.drb_nssai_map_items()) == {1: Nssai(sst=163, sd=1), 2: Nssai(sst=164, sd=1)}
+
+    deleted_nssai = uectx.drb_nssai_map_del(5)
+    assert deleted_nssai is None
+    deleted_nssai = uectx.drb_nssai_map_del(drb1)
+    assert deleted_nssai == Nssai(sst=drb1_sst, sd=drb1_sd)
+    assert uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))], 'drb_nssai_map': {2: {'sst': 164, 'sd': 1}}}
+
+    deleted_nssai = uectx.drb_nssai_map_del(drb2)
+    assert deleted_nssai == Nssai(sst=drb2_sst, sd=drb2_sd)
+    assert uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))]}
+
+    nssai = uectx.drb_nssai_map_get(drb1)
+    assert nssai is None
+    nssai = uectx.drb_nssai_map_get(drb2)
+    assert nssai is None
+    
     print("\n\n------ All tests passed ---------")
 
     sys.exit(0)
