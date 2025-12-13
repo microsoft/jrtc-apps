@@ -209,6 +209,14 @@ class CoreAMFInfo:
     ngap_ids: RanNgapUeIds = None 
 
 @dataclass
+class Nssai:
+    sst: int
+    sd: int
+
+    def __str__(self):
+        return f'{self.sst}:{self.sd}'
+
+@dataclass
 class UeContext:
     du_index: UniqueIndex
     cucp_index: UniqueIndex
@@ -221,6 +229,7 @@ class UeContext:
     ngap_ids: RanNgapUeIds = None 
     core_amf_context_index: int = None
     core_amf_info: CoreAMFInfo = None
+    drb_nssai_map: List[Tuple[int, Nssai]] = None
 
     def __init__(self, ran_unique_ue_id: RanUniqueUeId, du_index: UniqueIndex = None, cucp_index: UniqueIndex = None, cuup_index: UniqueIndex = None,
                  nci: int = None, tac: int = None):
@@ -247,27 +256,66 @@ class UeContext:
             return True
         return False
 
-    def get_bearer(self, cucp_ue_e1ap_id: UniqueIndex) -> Tuple[Tuple[str, int], Tuple[str, int]]:
+    def add_e1_bearer(self, bearer):
+        self.e1_bearers.append(bearer)
+
+    def get_e1_bearer(self, cucp_ue_e1ap_id: UniqueIndex) -> Tuple[Tuple[str, int], Tuple[str, int]]:
         for bearer in self.e1_bearers:
             if bearer[0] == cucp_ue_e1ap_id:
                 return bearer
         return None, None
         
-    def get_bearer_NoSrcCheck(self, cucp_ue_e1ap_id: int) -> Tuple[Tuple[str, int], Tuple[str, int]]:
+    def get_e1_bearer_NoSrcCheck(self, cucp_ue_e1ap_id: int) -> Tuple[Tuple[str, int], Tuple[str, int]]:
         for bearer in self.e1_bearers:
             if bearer[0][1] == cucp_ue_e1ap_id:
                 return bearer
         return None, None
 
+    def update_e1_bearer(self, cucp_ue_e1ap_id, cuup_ue_e1ap_id):
+        # update the bearer with the matching cucp_ue_e1ap_id with the cuup_ue_e1ap_id
+        for i, b in enumerate(self.e1_bearers):
+            if b[0] == cucp_ue_e1ap_id:
+                self.e1_bearers[i] = (b[0], cuup_ue_e1ap_id)
+                return self.e1_bearers[i]
+        return None
+
+    def del_e1_bearer_by_cucp_ue_e1ap_id(self, cucp_ue_e1ap_id):
+        # remove the bearer with the matching cucp_ue_e1ap_id
+        bearer = None
+        for i, b in enumerate(self.e1_bearers):
+            if b[0] == cucp_ue_e1ap_id:
+                bearer = self.e1_bearers.pop(i)
+                break
+        return bearer
+
+    def del_e1_bearer_by_cuup_ue_e1ap_id(self, cuup_ue_e1ap_id):
+        # remove the bearer with the matching cuup_ue_e1ap_id
+        bearer = None
+        for i, b in enumerate(self.e1_bearers):
+            if b[1] == cuup_ue_e1ap_id:
+                bearer = self.e1_bearers.pop(i)
+                break
+        return bearer
+
     def __str__(self):
-        return (f"UEContext(du_index={self.du_index}, "
-                f"cucp_index={self.cucp_index}, cuup_index={self.cuup_index}, "
-                f"ran_unique_ue_id={self.ran_unique_ue_id}, nci={self.nci}, "
-                f"tac={self.tac}, tmsi={self.tmsi}, "
-                f"e1_bearers={self.e1_bearers}, "
-                f"ngap_ids={self.ngap_ids},"
-                f"core_amf_context_index={self.core_amf_context_index}, "
-                f"core_amf_info={self.core_amf_info})")
+        parts = [
+            f"du_index={self.du_index}",
+            f"cucp_index={self.cucp_index}",
+            f"cuup_index={self.cuup_index}",
+            f"ran_unique_ue_id={self.ran_unique_ue_id}",
+            f"nci={self.nci}",
+            f"tac={self.tac}",
+            f"tmsi={self.tmsi}",
+            f"e1_bearers={self.e1_bearers}",
+            f"ngap_ids={self.ngap_ids}",
+            f"core_amf_context_index={self.core_amf_context_index}",
+            f"core_amf_info={self.core_amf_info}",
+        ]
+
+        if self.drb_nssai_map is not None:
+            parts.append(f"drb_nssai_map={self.drb_nssai_map}")
+
+        return "UEContext(" + ", ".join(parts) + ")"
 
     def concise_dict(self) -> Dict:
 
@@ -651,7 +699,7 @@ class UeContextsMap:
         if self.dbg:
             print(f"set_cucp_ue_e1ap_id: ue_id={ue_id} cucp_ue_e1ap_id={cucp_ue_e1ap_id}")
         bearer = (cucp_ue_e1ap_id, None)
-        self.contexts[ue_id].e1_bearers.append(bearer)
+        self.contexts[ue_id].add_e1_bearer(bearer)
         self.contexts_by_cucp_ue_e1ap_id[cucp_ue_e1ap_id] = ue_id
 
     ####################################################################
@@ -665,11 +713,7 @@ class UeContextsMap:
             print(f"clear_cucp_ue_e1ap_id: ue_id={ue_id} cucp_ue_e1ap_id={cucp_ue_e1ap_id}")
 
         # remove the bearer with the matching cucp_ue_e1ap_id
-        bearer = None
-        for i, b in enumerate(self.contexts[ue_id].e1_bearers):
-            if b[0] == cucp_ue_e1ap_id:
-                bearer = self.contexts[ue_id].e1_bearers.pop(i)
-                
+        bearer = self.contexts[ue_id].del_e1_bearer_by_cucp_ue_e1ap_id(cucp_ue_e1ap_id)
         if bearer is not None:
             self.contexts_by_cucp_ue_e1ap_id.pop(bearer[0], None)
             self.contexts_by_cuup_ue_e1ap_id.pop(bearer[1], None)
@@ -690,11 +734,7 @@ class UeContextsMap:
             print(f"set_cuup_ue_e1ap_id: ue_id={ue_id} cucp_ue_e1ap_id={cucp_ue_e1ap_id} cuup_ue_e1ap_id={cuup_ue_e1ap_id}")
 
         # update the bearer with the matching cucp_ue_e1ap_id with the cuup_ue_e1ap_id
-        for i, b in enumerate(self.contexts[ue_id].e1_bearers):
-            if b[0] == cucp_ue_e1ap_id:
-                self.contexts[ue_id].e1_bearers[i] = (b[0], cuup_ue_e1ap_id)
-                break
-        else:
+        if self.contexts[ue_id].update_e1_bearer(cucp_ue_e1ap_id, cuup_ue_e1ap_id) is None:
             if self.dbg:
                 print(f"Bearer with cucp_ue_e1ap_id {cucp_ue_e1ap_id} not found in UE context {ue_id}.")
             return
@@ -711,11 +751,7 @@ class UeContextsMap:
             print(f"clear_cuup_ue_e1ap_id: ue_id={ue_id} cuup_ue_e1ap_id={cuup_ue_e1ap_id}")
         
         # remove the bearer with the matching cuup_ue_e1ap_id
-        bearer = None
-        for i, b in enumerate(self.contexts[ue_id].e1_bearers):
-            if b[1] == cuup_ue_e1ap_id:
-                bearer = self.contexts[ue_id].e1_bearers.pop(i)
-
+        bearer = self.contexts[ue_id].del_e1_bearer_by_cuup_ue_e1ap_id(cuup_ue_e1ap_id)
         if bearer is not None:
             self.contexts_by_cucp_ue_e1ap_id.pop(bearer[0], None)
             self.contexts_by_cuup_ue_e1ap_id.pop(bearer[1], None)
@@ -1009,8 +1045,8 @@ class UeContextsMap:
             if self.dbg:
                 print(f"get_e1_bearer_NoSrcCheck: UE context with cucp_ue_e1ap_id {cucp_ue_e1ap_id} not found.")
             return None, (None, None)
-        v = ue_id, self.contexts[ue_id].get_bearer_NoSrcCheck(cucp_ue_e1ap_id)
-        return ue_id, self.contexts[ue_id].get_bearer_NoSrcCheck(cucp_ue_e1ap_id)
+        v = ue_id, self.contexts[ue_id].get_e1_bearer_NoSrcCheck(cucp_ue_e1ap_id)
+        return ue_id, self.contexts[ue_id].get_e1_bearer_NoSrcCheck(cucp_ue_e1ap_id)
 
     ####################################################################
     def hook_du_ue_ctx_creation(self, du_src: str, du_index: int, plmn: int, pci: int, crnti: int, tac: int, nci: int,  now: dt.datetime = None) -> None:
@@ -2751,7 +2787,7 @@ if __name__ == "__main__":
         cgi_cellid=a.get("nr_cgi", {}).get("cell_id", None)
     )
     uectx = s.getue_by_id(0)
-    assert uectx is not None and asdict(uectx) == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': None, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [], 'tmsi': None, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_context_index': 0, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
     assert len(s.amf_contexts) == 1
     
     s.hook_core_amf_info_remove_ran(
@@ -2769,11 +2805,7 @@ if __name__ == "__main__":
         cgi_plmn=a.get("nr_cgi", {}).get("plmn_id", None),
         cgi_cellid=a.get("nr_cgi", {}).get("cell_id", None)
     )
-    assert uectx is not None and asdict(uectx) == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 
-                                                   'cuup_index': None, 
-                                                   'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 
-                                                   'e1_bearers': [], 'tmsi': None, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000},
-                                                   'core_amf_context_index': None, 'core_amf_info': None}
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}
     num_amf_contexts_associated_with_ue = sum(1 for v in s.amf_contexts.values() if v[0] is not None)
     
     ## Add it again
@@ -2796,7 +2828,7 @@ if __name__ == "__main__":
         cgi_cellid=a.get("nr_cgi", {}).get("cell_id", None)
     )
     uectx = s.getue_by_id(0)  
-    assert uectx is not None and asdict(uectx) == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': None, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [], 'tmsi': None, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_context_index': 0, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
     assert len(s.amf_contexts) == 1
     num_amf_contexts_associated_with_ue = sum(1 for v in s.amf_contexts.values() if v[0] is not None)
     assert num_amf_contexts_associated_with_ue == 1
