@@ -217,6 +217,15 @@ class Nssai:
         return f'{self.sst}:{self.sd}'
 
 @dataclass
+class PduSession:
+    nssai: Nssai
+    drbs: List[int] = field(default_factory=list)
+   
+    def __str__(self):
+        return f'nssai={self.nssap}, drbs={self.drbs}'
+
+
+@dataclass
 class UeContext:
     du_index: UniqueIndex
     cucp_index: UniqueIndex
@@ -229,7 +238,8 @@ class UeContext:
     ngap_ids: RanNgapUeIds = None 
     core_amf_context_index: int = None
     core_amf_info: CoreAMFInfo = None
-    drb_nssai_map: Dict[int, Nssai] = field(default_factory=dict)
+    pdu_sessions: Dict[int, PduSession] = field(default_factory=dict)
+
 
     def __init__(self, ran_unique_ue_id: RanUniqueUeId, du_index: UniqueIndex = None, cucp_index: UniqueIndex = None, cuup_index: UniqueIndex = None,
                  nci: int = None, tac: int = None):
@@ -242,7 +252,7 @@ class UeContext:
         self.cuup_index = cuup_index
         self.e1_bearers = []
         self.ngap_ids = None
-        self.drb_nssai_map = {}
+        self.pdu_sessions = {}
 
     def used(self) -> bool:
         """
@@ -298,30 +308,90 @@ class UeContext:
                 break
         return bearer
 
-    def drb_nssai_map_add_update(self, drb_id: int, sst: int, sd: int):
+    def pdu_session_add_update(self, session_id: int, sst: int, sd: int, drb: int):
         """
-        Add a new DRB→NSSAI mapping, or update the existing one.
+        Add a DRB to a PDU session. If the session does not exist, create it.
+        Enforces that:
+            - A DRB can only belong to one session.
+            - Each session must have a unique NSSAI (delete any existing session with the same NSSAI).
+            - DRBs are always kept sorted.
         """
-        self.drb_nssai_map[drb_id] = Nssai(sst, sd)
+        new_nssai = Nssai(sst, sd)
+
+        # Remove the DRB from any other session it might belong to
+        for sess in self.pdu_sessions.values():
+            if drb in sess.drbs:
+                sess.drbs.remove(drb)
+
+        # Remove any existing session with the same NSSAI
+        sessions_to_remove = [sid for sid, sess in self.pdu_sessions.items()
+                            if sess.nssai == new_nssai and sid != session_id]
+        for sid in sessions_to_remove:
+            del self.pdu_sessions[sid]
+
+        # If session exists, update it
+        if session_id in self.pdu_sessions:
+            session = self.pdu_sessions[session_id]
+            session.nssai = new_nssai  # ensure NSSAI is updated
+            if drb not in session.drbs:
+                session.drbs.append(drb)
+            session.drbs.sort()
+        else:
+            # Create a new session
+            self.pdu_sessions[session_id] = PduSession(
+                nssai=new_nssai,
+                drbs=[drb]
+            )
+
+    # def pdu_session_add_update(self, session_id: int, sst: int, sd: int, drb: int):
+    #     """
+    #     Add a DRB to a PDU session. If the session does not exist, create it.
+    #     Enforces that:
+    #         - A DRB can only belong to one session.
+    #         - Each session must have a unique NSSAI (overwrite if duplicate found).
+    #         - DRBs are always kept sorted.
+    #     """
+    #     new_nssai = Nssai(sst, sd)
+
+    #     # Remove the DRB from any other session it might belong to
+    #     for sess in self.pdu_sessions.values():
+    #         if drb in sess.drbs:
+    #             sess.drbs.remove(drb)
+
+    #     # Overwrite any existing session with the same NSSAI
+    #     for sid, sess in self.pdu_sessions.items():
+    #         if sess.nssai == new_nssai and sid != session_id:
+    #             sess.nssai = new_nssai  # overwrite NSSAI if duplicate
+
+    #     # If session exists, update it
+    #     if session_id in self.pdu_sessions:
+    #         session = self.pdu_sessions[session_id]
+    #         session.nssai = new_nssai  # ensure NSSAI is updated
+    #         if drb not in session.drbs:
+    #             session.drbs.append(drb)
+    #         session.drbs.sort()  # keep DRBs sorted
+    #     else:
+    #         # Create a new session
+    #         self.pdu_sessions[session_id] = PduSession(
+    #             nssai=new_nssai,
+    #             drbs=[drb]
+    #         )
+
+    def pdu_session_remove(self, session_id: int) -> Optional[PduSession]:
+        """
+        Remove a PDU session by session_id.
+        Returns the removed session, or None if it did not exist.
+        """
+        return self.pdu_sessions.pop(session_id, None)
 
     def drb_nssai_map_get(self, drb_id: int) -> Optional[Nssai]:
         """
-        Get the (sst, sd) tuple for a given DRB id, or None if not found.
+        Return the Nssai for the given DRB ID, or None if the DRB is not assigned.
         """
-        return self.drb_nssai_map.get(drb_id, None)
-
-    def drb_nssai_map_del(self, drb_id: int) -> Optional[Nssai]:
-        """
-        Delete a DRB→NSSAI mapping by DRB ID. Returns the removed Nssai, or None if not found.
-        """
-        return self.drb_nssai_map.pop(drb_id, None)
-
-    def drb_nssai_map_items(self):
-        """
-        Return a view of all DRB→NSSAI items.
-        Useful for iteration without exposing internal dict directly.
-        """
-        return self.drb_nssai_map.items()
+        for session in self.pdu_sessions.values():
+            if drb_id in session.drbs:
+                return session.nssai
+        return None
 
     def __str__(self):
         parts = [
@@ -331,15 +401,30 @@ class UeContext:
             f"ran_unique_ue_id={self.ran_unique_ue_id}",
             f"nci={self.nci}",
             f"tac={self.tac}",
-            f"tmsi={self.tmsi}",
             f"e1_bearers={self.e1_bearers}",
-            f"ngap_ids={self.ngap_ids}",
-            f"core_amf_context_index={self.core_amf_context_index}",
-            f"core_amf_info={self.core_amf_info}",
         ]
 
-        if self.drb_nssai_map:
-            parts.append(f"drb_nssai_map={self.drb_nssai_map}")
+        if self.tmsi is not None:
+            parts.append(f"tmsi={self.tmsi}")
+
+        if self.ngap_ids is not None:
+            parts.append(f"ngap_ids={self.ngap_ids}")
+
+        if self.core_amf_context_index is not None:
+            parts.append(f"core_amf_context_index={self.core_amf_context_index}")
+
+        if self.core_amf_info is not None:
+            parts.append(f"core_amf_info={self.core_amf_info}")
+
+        if self.pdu_sessions:
+            pdu_str = {
+                sid: {
+                    "nssai": {"sst": sess.nssai.sst, "sd": sess.nssai.sd},
+                    "drbs": sess.drbs,
+                }
+                for sid, sess in sorted(self.pdu_sessions.items())
+            }
+            parts.append(f"pdu_sessions={pdu_str}")
 
         return "UEContext(" + ", ".join(parts) + ")"
 
@@ -358,8 +443,8 @@ class UeContext:
             d.pop("e1_bearers")
 
         # Remove drb_nssai_map if it is empty
-        if "drb_nssai_map" in d and len(d["drb_nssai_map"]) == 0:
-            d.pop("drb_nssai_map")
+        if "pdu_sessions" in d and len(d["pdu_sessions"]) == 0:
+            d.pop("pdu_sessions")
 
         return d
 
@@ -3017,61 +3102,67 @@ if __name__ == "__main__":
                                 plmn,
                                 pci,
                                 crnti)
-    s.hook_e1_cucp_bearer_context_setup(    cucp_src, 
-                                            cucp_index,   
-                                            cucp_ue_e1ap_id) 
-    s.hook_e1_cuup_bearer_context_setup(    cuup_src,
-                                            cuup_index,
-                                            cucp_ue_e1ap_id,
-                                            cuup_ue_e1ap_id,
-                                            True)  # succees
-
+   
     uectx = s.getue_by_id(0)
-    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))]}
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12}
 
+    session1 = 1
+    session2 = 2
+    session3 = 3
+    sst1 = 1
+    sd1 = 162
+    sst2 = 1
+    sd2 = 163
     drb1 = 1
-    drb1_sst = 162
-    drb1_sd = 1
-    uectx.drb_nssai_map_add_update(drb1, drb1_sst, drb1_sd)
-    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))], 'drb_nssai_map': {1: {'sst': 162, 'sd': 1}}}
-
-    # update drb1 to new Nssai
-    drb1 = 1
-    drb1_sst = 163
-    drb1_sd = 1
-    uectx.drb_nssai_map_add_update(drb1, drb1_sst, drb1_sd)
-    # add drb2
     drb2 = 2
-    drb2_sst = 164
-    drb2_sd = 1
-    uectx.drb_nssai_map_add_update(drb2, drb2_sst, drb2_sd)
-    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))], 'drb_nssai_map': {1: {'sst': 163, 'sd': 1}, 2: {'sst': 164, 'sd': 1}}}
+    drb3 = 3
+    drb4 = 4
+    # session1, with drbs 1-4
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb1)
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb2)
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb3)
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb4)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [1, 2, 3, 4]}}}
+
+    # trying adding drb1 again
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb1)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [1, 2, 3, 4]}}}
+
+    # add drb4 to new session2
+    uectx.pdu_session_add_update(session2, sst2, sd2, drb4)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [1, 2, 3]}, 2: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [4]}}}
+
+    # create a new session3 using same sst/sd as session 2
+    uectx.pdu_session_add_update(session3, sst2, sd2, drb1)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [2, 3]}, 3: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [1]}}}
+
+    # test drb_nssai_map_get 
+    nssai = uectx.drb_nssai_map_get(drb1)
+    assert nssai == Nssai(sst=sst2, sd=sd2)
+    nssai = uectx.drb_nssai_map_get(drb2)
+    assert nssai == Nssai(sst=sst1, sd=sd1)
+    nssai = uectx.drb_nssai_map_get(drb3)
+    assert nssai == Nssai(sst=sst1, sd=sd1)
+    nssai = uectx.drb_nssai_map_get(drb4)
+    assert nssai is None
     
-    nssai = uectx.drb_nssai_map_get(5)
-    assert nssai is None
+    # test pdu_session_remove 
+    uectx.pdu_session_remove(session1)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {3: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [1]}}}
 
     nssai = uectx.drb_nssai_map_get(drb1)
-    assert nssai == Nssai(sst=drb1_sst, sd=drb1_sd)
-
-    nssai = uectx.drb_nssai_map_get(drb2)
-    assert nssai == Nssai(sst=drb2_sst, sd=drb2_sd)
-
-    assert dict(uectx.drb_nssai_map_items()) == {1: Nssai(sst=163, sd=1), 2: Nssai(sst=164, sd=1)}
-
-    deleted_nssai = uectx.drb_nssai_map_del(5)
-    assert deleted_nssai is None
-    deleted_nssai = uectx.drb_nssai_map_del(drb1)
-    assert deleted_nssai == Nssai(sst=drb1_sst, sd=drb1_sd)
-    assert uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))], 'drb_nssai_map': {2: {'sst': 164, 'sd': 1}}}
-
-    deleted_nssai = uectx.drb_nssai_map_del(drb2)
-    assert deleted_nssai == Nssai(sst=drb2_sst, sd=drb2_sd)
-    assert uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': {'src': 'cuup1', 'idx': 1400}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [(('cucp1', 1), ('cuup1', 1))]}
-
-    nssai = uectx.drb_nssai_map_get(drb1)
-    assert nssai is None
+    assert nssai == Nssai(sst=sst2, sd=sd2)
     nssai = uectx.drb_nssai_map_get(drb2)
     assert nssai is None
+    nssai = uectx.drb_nssai_map_get(drb3)
+    assert nssai is None
+    nssai = uectx.drb_nssai_map_get(drb4)
+    assert nssai is None
+
+    # try to remove an unknwn session i
+    uectx.pdu_session_remove(10)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {3: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [1]}}}
+
     
     print("\n\n------ All tests passed ---------")
 

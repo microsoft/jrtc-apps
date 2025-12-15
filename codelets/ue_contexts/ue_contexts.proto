@@ -67,3 +67,21 @@ message e1ap_cuup_bearer_ctx_release {
    required uint32 cuup_ue_e1ap_id = 5;
 }
 
+message nssai_t {
+   required uint32 sst = 1;
+   required uint32 sd = 2;
+}
+
+message cucp_pdu_session_bearer_add_modify {
+   required uint64 timestamp = 1;
+   required uint64 cucp_ue_index = 2;
+   required uint32 pdu_session_id = 3;
+   required uint32 drb_id = 4;
+   required nssai_t nssai = 5;
+}
+
+message cucp_pdu_session_remove {
+   required uint64 timestamp = 1;
+   required uint64 cucp_ue_index = 2;
+   required uint32 pdu_session_id = 3;
+}
