@@ -69,7 +69,7 @@ duConfigs:
         ruRemoteMAC: "6C:AD:AD:00:00:69" # Remote RU fronthaul MAC address
         ruVLAN: "1"
         ruDPDKResource: "intel.com/intel_sriov_dpdk_ru0"
-        ruDLArfcn: 630684
+        ruDLArfcn: 633666
         ruBandwidth: 40
       # cell2:
       #   ruDPDKResource: "intel.com/intel_sriov_dpdk_ru1"
@@ -253,8 +253,12 @@ debug_mode:
 # log levels can be info,debug,warning,error, 
 log:
   rrc_level: warning
-  mac_level: warning
   rlc_level: warning
+  mac_level: warning
+  phy_level: warning
+  ofh_level: warning
+  radio_level: warning
+  hal_level: warning
 
 # Also metrics, pcap
 
