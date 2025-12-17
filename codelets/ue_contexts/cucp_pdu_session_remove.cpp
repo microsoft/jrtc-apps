@@ -51,7 +51,7 @@ uint64_t jbpf_main(void* state)
     // populate the output
     uint64_t timestamp = jbpf_time_get_ns();
     out->timestamp = timestamp;
-    out->cucp_ue_index = session_ctx.cu_up_ue_index;
+    out->cucp_ue_index = session_ctx.cu_cp_ue_index;
     out->pdu_session_id = session_ctx.pdu_session_id;
 
     int ret = jbpf_ringbuf_output(&output_map, (void *)out, sizeof(cucp_pdu_session_remove));
