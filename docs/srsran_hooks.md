@@ -98,6 +98,10 @@
   - [12.1. __mac\_sched\_slice\_mgmt control hook__](#121-mac_sched_slice_mgmt-control-hook)
 - [13. Periodic performance hook](#13-periodic-performance-hook)
   - [13.1. report\_stats](#131-report_stats)
+- [14. PDU Sessions](#14-pdu-sessions)
+  - [14.1. __cucp\_pdu\_session\_bearer\_setup__](#141-cucp_pdu_session_bearer_setup)
+  - [14.2. __cucp\_pdu\_session\_bearer\_modify__](#142-cucp_pdu_session_bearer_modify)
+  - [14.3. __cucp\_pdu\_session\_remove__](#143-cucp_pdu_session_remove)
 
 
 
@@ -1056,3 +1060,33 @@ The hook has information passed in using a _jbpf_perf_hook_list__ as shown below
         data_end: pointer to end of the jbpf_perf_hook_list
         meas_period: Period of measurements in ms
     ```
+
+# 14. PDU Sessions
+
+These hoks are used to track PDU sessions, and can be used to correlate the slice __NSSAI__ and bearer __DRB__.
+
+All the hooks have information passed in using a __jbpf_pdu_session_ctx_info__ as shown below ..
+```c
+    struct jbpf_pdu_session_ctx_info {
+        uint16_t ctx_id;   /* Context id (could be implementation specific) */
+        uint64_t cu_cp_ue_index; 
+        uint16_t pdu_session_id; 
+        uint16_t drb_id; 
+        struct {
+            uint8_t sst;
+            uint32_t sd;
+        } nssai;
+    };
+```
+
+Context info:  
+```
+    data: pointer to the jbpf_pdu_session_ctx_info
+    data_end: pointer to end of the jbpf_pdu_session_ctx_info
+```
+
+## 14.1. __cucp_pdu_session_bearer_setup__
+  
+## 14.2. __cucp_pdu_session_bearer_modify__
+  
+## 14.3. __cucp_pdu_session_remove__
