@@ -40,7 +40,7 @@
               "durationMs": 86400000
             },
             "value": {
-              "durationMs": 3600000
+              "durationMs": 300000
             }
           }
         ],
@@ -3365,7 +3365,7 @@
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces"
             },
-            "customWidth": "50",
+            "customWidth": "100",
             "name": "TrafficRequestedAchieved"
           },
           {
@@ -3379,7 +3379,7 @@
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "areachart"
             },
-            "customWidth": "50",
+            "customWidth": "100",
             "name": "DLDiscarded (Pkts)"
           }
         ]
