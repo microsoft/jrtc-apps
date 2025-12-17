@@ -19,8 +19,8 @@ message slice_t {
 
 enum slice_mgmt_msg_type {
     UNKNOWN = 0;
-    GET_SLICE_ALLOC  = 1;
-    SET_SLICE_ALLOC  = 2;
+    SLICE_ALLOC_GET  = 1;
+    SLICE_ALLOC_SET  = 2;
 }
 
 message slice_mgmt_set_req {
@@ -31,7 +31,7 @@ message slice_mgmt_set_req {
 
 message slice_mgmt_req {
     required slice_mgmt_msg_type msg_type = 1;
-    optional slice_mgmt_set_req set_req = 2;   // Used if msg_type == GET_SLICE_ALLOC
+    optional slice_mgmt_set_req set_req = 2;   // Used if msg_type == SLICE_ALLOC_GET
 }
 
 message slice_mgmt_ind {

@@ -75,6 +75,9 @@
   - [10.1. slice\_management](#101-slice_management)
 - [11. Performance statistics](#11-performance-statistics)
   - [11.1. jbpf\_stats\_report](#111-jbpf_stats_report)
+- [12. PDU Sessions](#12-pdu-sessions)
+  - [12.1. cucp\_pdu\_session\_bearer\_add\_modify](#121-cucp_pdu_session_bearer_add_modify)
+  - [12.2. cucp\_pdu\_session\_remove](#122-cucp_pdu_session_remove)
 
 
 # 1. Introduction
@@ -544,3 +547,13 @@ It can be used to identify cases where codelets are taking longer than expected.
 Binds to hook [report_stats](srsran_hooks.md#131-report_stats).  
 
 Sends messages as defined in [jbpf_stats_report.proto](../codelets/perf/jbpf_stats_report.proto).
+
+# 12. PDU Sessions
+
+These codelets are used to track PDU sessions, and lso allow the correlation of slice __NSSAI__ with bearer __DRB__ values.
+
+## 12.1. [cucp_pdu_session_bearer_add_modify](../codelets/ue_contexts/cucp_pdu_session_bearer_add_modify.cpp)
+Binds to hooks [cucp_pdu_session_bearer_setup](srsran_hooks.md#141-cucp_pdu_session_bearer_setup) and [cucp_pdu_session_bearer_modify](srsran_hooks.md#142-cucp_pdu_session_bearer_modify).
+
+## 12.2. [cucp_pdu_session_remove](../codelets/ue_contexts/cucp_pdu_session_remove.cpp)
+Binds to hooks [cucp_pdu_session_remove](srsran_hooks.md#143-cucp_pdu_session_remove) 

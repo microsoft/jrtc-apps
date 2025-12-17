@@ -1,8 +1,11 @@
 
 # Config for periodicity of sending SET request
-slice_update_periodicity_secs = 60
+slice_update_periodicity_secs = 300
 # which SFN to perform the re-allocation.  "None" = immediately
 slice_update_sfn = 20
+# low and high "maxPRB" percentages
+slice_prb_percentage_low = 30
+slice_prb_percentage_high = 70
 # which slot to perform the re-allocation.  "None" = immediately
 # Note that if you select a slot which is not an downlink slot in the configured tdd pattern, the reconfig will never be triggered
 slice_update_slot_index = None
