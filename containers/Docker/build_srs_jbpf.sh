@@ -15,7 +15,7 @@ Usage()
    echo "Build srsRan image"
    echo "options:"
    echo "[-b]    Optional base image tag.  Default='latest'"
-   echo "[-s]    Optional image tag.  Default='srsran25.04-latest'"
+   echo "[-s]    Optional image tag.  Default='$SRSRAN_IMAGE_TAG'"
    echo "[-c]    Optional.  If included, '--no-cache- is added to the Docker build"
    echo
 }

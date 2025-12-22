@@ -15,7 +15,7 @@ Usage()
    echo "Build srsRan=Jbpf base image"
    echo "options:"
    echo "[-b]    Optional base image tag.  Default='latest'"
-   echo "[-s]    Optional srsRan image tag.  Default='srsran25.04-latest'"
+   echo "[-s]    Optional srsRan image tag.  Default='$SRSRAN_IMAGE_TAG'"
    echo
 }
 
