@@ -129,7 +129,7 @@ uint64_t jbpf_main(void* state)
             return JBPF_CODELET_FAILURE;
         }        
 
-        jbpf_printf_debug("SLICE_ALLOC_IND sent to higher layers\n");
+        //jbpf_printf_debug("SLICE_ALLOC_IND sent to higher layers\n");
 
         // clear trigger flag
         *indication_triggered = 0;
@@ -140,7 +140,7 @@ uint64_t jbpf_main(void* state)
 
         if (input_req_tmp->msg_type == slice_mgmt_msg_type_SLICE_ALLOC_GET) {
 
-            jbpf_printf_debug("SLICE_ALLOC_GET received from higher layers.\n");
+            //jbpf_printf_debug("SLICE_ALLOC_GET received from higher layers.\n");
 
             // request received to send latest slice config to higher layer app
 
@@ -149,7 +149,7 @@ uint64_t jbpf_main(void* state)
 
         } else if (input_req_tmp->msg_type == slice_mgmt_msg_type_SLICE_ALLOC_SET) {
 
-            jbpf_printf_debug("SLICE_ALLOC_SET received from higher layers\n");
+            //jbpf_printf_debug("SLICE_ALLOC_SET received from higher layers\n");
 
             // request received to set new slice config
             
