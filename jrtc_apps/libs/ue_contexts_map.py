@@ -117,8 +117,8 @@
 
 
 import sys
-from dataclasses import dataclass, asdict, replace
-from typing import List, Tuple, Dict
+from dataclasses import dataclass, asdict, replace, field
+from typing import List, Optional, Tuple, Dict
 from enum import IntEnum
 import datetime as dt
 
@@ -209,6 +209,23 @@ class CoreAMFInfo:
     ngap_ids: RanNgapUeIds = None 
 
 @dataclass
+class Nssai:
+    sst: int
+    sd: int
+
+    def __str__(self):
+        return f'{self.sst}:{self.sd}'
+
+@dataclass
+class PduSession:
+    nssai: Nssai
+    drbs: List[int] = field(default_factory=list)
+   
+    def __str__(self):
+        return f'nssai={self.nssap}, drbs={self.drbs}'
+
+
+@dataclass
 class UeContext:
     du_index: UniqueIndex
     cucp_index: UniqueIndex
@@ -221,6 +238,8 @@ class UeContext:
     ngap_ids: RanNgapUeIds = None 
     core_amf_context_index: int = None
     core_amf_info: CoreAMFInfo = None
+    pdu_sessions: Dict[int, PduSession] = field(default_factory=dict)
+
 
     def __init__(self, ran_unique_ue_id: RanUniqueUeId, du_index: UniqueIndex = None, cucp_index: UniqueIndex = None, cuup_index: UniqueIndex = None,
                  nci: int = None, tac: int = None):
@@ -233,6 +252,7 @@ class UeContext:
         self.cuup_index = cuup_index
         self.e1_bearers = []
         self.ngap_ids = None
+        self.pdu_sessions = {}
 
     def used(self) -> bool:
         """
@@ -247,27 +267,166 @@ class UeContext:
             return True
         return False
 
-    def get_bearer(self, cucp_ue_e1ap_id: UniqueIndex) -> Tuple[Tuple[str, int], Tuple[str, int]]:
+    def add_e1_bearer(self, bearer):
+        self.e1_bearers.append(bearer)
+
+    def get_e1_bearer(self, cucp_ue_e1ap_id: UniqueIndex) -> Tuple[Tuple[str, int], Tuple[str, int]]:
         for bearer in self.e1_bearers:
             if bearer[0] == cucp_ue_e1ap_id:
                 return bearer
         return None, None
         
-    def get_bearer_NoSrcCheck(self, cucp_ue_e1ap_id: int) -> Tuple[Tuple[str, int], Tuple[str, int]]:
+    def get_e1_bearer_NoSrcCheck(self, cucp_ue_e1ap_id: int) -> Tuple[Tuple[str, int], Tuple[str, int]]:
         for bearer in self.e1_bearers:
             if bearer[0][1] == cucp_ue_e1ap_id:
                 return bearer
         return None, None
 
+    def update_e1_bearer(self, cucp_ue_e1ap_id, cuup_ue_e1ap_id):
+        # update the bearer with the matching cucp_ue_e1ap_id with the cuup_ue_e1ap_id
+        for i, b in enumerate(self.e1_bearers):
+            if b[0] == cucp_ue_e1ap_id:
+                self.e1_bearers[i] = (b[0], cuup_ue_e1ap_id)
+                return self.e1_bearers[i]
+        return None
+
+    def del_e1_bearer_by_cucp_ue_e1ap_id(self, cucp_ue_e1ap_id):
+        # remove the bearer with the matching cucp_ue_e1ap_id
+        bearer = None
+        for i, b in enumerate(self.e1_bearers):
+            if b[0] == cucp_ue_e1ap_id:
+                bearer = self.e1_bearers.pop(i)
+                break
+        return bearer
+
+    def del_e1_bearer_by_cuup_ue_e1ap_id(self, cuup_ue_e1ap_id):
+        # remove the bearer with the matching cuup_ue_e1ap_id
+        bearer = None
+        for i, b in enumerate(self.e1_bearers):
+            if b[1] == cuup_ue_e1ap_id:
+                bearer = self.e1_bearers.pop(i)
+                break
+        return bearer
+
+    def pdu_session_add_update(self, session_id: int, sst: int, sd: int, drb: int):
+        """
+        Add a DRB to a PDU session. If the session does not exist, create it.
+        Enforces that:
+            - A DRB can only belong to one session.
+            - Each session must have a unique NSSAI (delete any existing session with the same NSSAI).
+            - DRBs are always kept sorted.
+        """
+        new_nssai = Nssai(sst, sd)
+
+        # Remove the DRB from any other session it might belong to
+        for sess in self.pdu_sessions.values():
+            if drb in sess.drbs:
+                sess.drbs.remove(drb)
+
+        # Remove any existing session with the same NSSAI
+        sessions_to_remove = [sid for sid, sess in self.pdu_sessions.items()
+                            if sess.nssai == new_nssai and sid != session_id]
+        for sid in sessions_to_remove:
+            del self.pdu_sessions[sid]
+
+        # If session exists, update it
+        if session_id in self.pdu_sessions:
+            session = self.pdu_sessions[session_id]
+            session.nssai = new_nssai  # ensure NSSAI is updated
+            if drb not in session.drbs:
+                session.drbs.append(drb)
+            session.drbs.sort()
+        else:
+            # Create a new session
+            self.pdu_sessions[session_id] = PduSession(
+                nssai=new_nssai,
+                drbs=[drb]
+            )
+
+    # def pdu_session_add_update(self, session_id: int, sst: int, sd: int, drb: int):
+    #     """
+    #     Add a DRB to a PDU session. If the session does not exist, create it.
+    #     Enforces that:
+    #         - A DRB can only belong to one session.
+    #         - Each session must have a unique NSSAI (overwrite if duplicate found).
+    #         - DRBs are always kept sorted.
+    #     """
+    #     new_nssai = Nssai(sst, sd)
+
+    #     # Remove the DRB from any other session it might belong to
+    #     for sess in self.pdu_sessions.values():
+    #         if drb in sess.drbs:
+    #             sess.drbs.remove(drb)
+
+    #     # Overwrite any existing session with the same NSSAI
+    #     for sid, sess in self.pdu_sessions.items():
+    #         if sess.nssai == new_nssai and sid != session_id:
+    #             sess.nssai = new_nssai  # overwrite NSSAI if duplicate
+
+    #     # If session exists, update it
+    #     if session_id in self.pdu_sessions:
+    #         session = self.pdu_sessions[session_id]
+    #         session.nssai = new_nssai  # ensure NSSAI is updated
+    #         if drb not in session.drbs:
+    #             session.drbs.append(drb)
+    #         session.drbs.sort()  # keep DRBs sorted
+    #     else:
+    #         # Create a new session
+    #         self.pdu_sessions[session_id] = PduSession(
+    #             nssai=new_nssai,
+    #             drbs=[drb]
+    #         )
+
+    def pdu_session_remove(self, session_id: int) -> Optional[PduSession]:
+        """
+        Remove a PDU session by session_id.
+        Returns the removed session, or None if it did not exist.
+        """
+        return self.pdu_sessions.pop(session_id, None)
+
+    def drb_nssai_map_get(self, drb_id: int) -> Optional[Nssai]:
+        """
+        Return the Nssai for the given DRB ID, or None if the DRB is not assigned.
+        """
+        for session in self.pdu_sessions.values():
+            if drb_id in session.drbs:
+                return session.nssai
+        return None
+
     def __str__(self):
-        return (f"UEContext(du_index={self.du_index}, "
-                f"cucp_index={self.cucp_index}, cuup_index={self.cuup_index}, "
-                f"ran_unique_ue_id={self.ran_unique_ue_id}, nci={self.nci}, "
-                f"tac={self.tac}, tmsi={self.tmsi}, "
-                f"e1_bearers={self.e1_bearers}, "
-                f"ngap_ids={self.ngap_ids},"
-                f"core_amf_context_index={self.core_amf_context_index}, "
-                f"core_amf_info={self.core_amf_info})")
+        parts = [
+            f"du_index={self.du_index}",
+            f"cucp_index={self.cucp_index}",
+            f"cuup_index={self.cuup_index}",
+            f"ran_unique_ue_id={self.ran_unique_ue_id}",
+            f"nci={self.nci}",
+            f"tac={self.tac}",
+            f"e1_bearers={self.e1_bearers}",
+        ]
+
+        if self.tmsi is not None:
+            parts.append(f"tmsi={self.tmsi}")
+
+        if self.ngap_ids is not None:
+            parts.append(f"ngap_ids={self.ngap_ids}")
+
+        if self.core_amf_context_index is not None:
+            parts.append(f"core_amf_context_index={self.core_amf_context_index}")
+
+        if self.core_amf_info is not None:
+            parts.append(f"core_amf_info={self.core_amf_info}")
+
+        if self.pdu_sessions:
+            pdu_str = {
+                sid: {
+                    "nssai": {"sst": sess.nssai.sst, "sd": sess.nssai.sd},
+                    "drbs": sess.drbs,
+                }
+                for sid, sess in sorted(self.pdu_sessions.items())
+            }
+            parts.append(f"pdu_sessions={pdu_str}")
+
+        return "UEContext(" + ", ".join(parts) + ")"
 
     def concise_dict(self) -> Dict:
 
@@ -282,6 +441,10 @@ class UeContext:
         # remove e1_beaerss if it is empty
         if "e1_bearers" in d and len(d["e1_bearers"]) == 0:
             d.pop("e1_bearers")
+
+        # Remove drb_nssai_map if it is empty
+        if "pdu_sessions" in d and len(d["pdu_sessions"]) == 0:
+            d.pop("pdu_sessions")
 
         return d
 
@@ -651,7 +814,7 @@ class UeContextsMap:
         if self.dbg:
             print(f"set_cucp_ue_e1ap_id: ue_id={ue_id} cucp_ue_e1ap_id={cucp_ue_e1ap_id}")
         bearer = (cucp_ue_e1ap_id, None)
-        self.contexts[ue_id].e1_bearers.append(bearer)
+        self.contexts[ue_id].add_e1_bearer(bearer)
         self.contexts_by_cucp_ue_e1ap_id[cucp_ue_e1ap_id] = ue_id
 
     ####################################################################
@@ -665,11 +828,7 @@ class UeContextsMap:
             print(f"clear_cucp_ue_e1ap_id: ue_id={ue_id} cucp_ue_e1ap_id={cucp_ue_e1ap_id}")
 
         # remove the bearer with the matching cucp_ue_e1ap_id
-        bearer = None
-        for i, b in enumerate(self.contexts[ue_id].e1_bearers):
-            if b[0] == cucp_ue_e1ap_id:
-                bearer = self.contexts[ue_id].e1_bearers.pop(i)
-                
+        bearer = self.contexts[ue_id].del_e1_bearer_by_cucp_ue_e1ap_id(cucp_ue_e1ap_id)
         if bearer is not None:
             self.contexts_by_cucp_ue_e1ap_id.pop(bearer[0], None)
             self.contexts_by_cuup_ue_e1ap_id.pop(bearer[1], None)
@@ -690,11 +849,7 @@ class UeContextsMap:
             print(f"set_cuup_ue_e1ap_id: ue_id={ue_id} cucp_ue_e1ap_id={cucp_ue_e1ap_id} cuup_ue_e1ap_id={cuup_ue_e1ap_id}")
 
         # update the bearer with the matching cucp_ue_e1ap_id with the cuup_ue_e1ap_id
-        for i, b in enumerate(self.contexts[ue_id].e1_bearers):
-            if b[0] == cucp_ue_e1ap_id:
-                self.contexts[ue_id].e1_bearers[i] = (b[0], cuup_ue_e1ap_id)
-                break
-        else:
+        if self.contexts[ue_id].update_e1_bearer(cucp_ue_e1ap_id, cuup_ue_e1ap_id) is None:
             if self.dbg:
                 print(f"Bearer with cucp_ue_e1ap_id {cucp_ue_e1ap_id} not found in UE context {ue_id}.")
             return
@@ -711,11 +866,7 @@ class UeContextsMap:
             print(f"clear_cuup_ue_e1ap_id: ue_id={ue_id} cuup_ue_e1ap_id={cuup_ue_e1ap_id}")
         
         # remove the bearer with the matching cuup_ue_e1ap_id
-        bearer = None
-        for i, b in enumerate(self.contexts[ue_id].e1_bearers):
-            if b[1] == cuup_ue_e1ap_id:
-                bearer = self.contexts[ue_id].e1_bearers.pop(i)
-
+        bearer = self.contexts[ue_id].del_e1_bearer_by_cuup_ue_e1ap_id(cuup_ue_e1ap_id)
         if bearer is not None:
             self.contexts_by_cucp_ue_e1ap_id.pop(bearer[0], None)
             self.contexts_by_cuup_ue_e1ap_id.pop(bearer[1], None)
@@ -1009,8 +1160,8 @@ class UeContextsMap:
             if self.dbg:
                 print(f"get_e1_bearer_NoSrcCheck: UE context with cucp_ue_e1ap_id {cucp_ue_e1ap_id} not found.")
             return None, (None, None)
-        v = ue_id, self.contexts[ue_id].get_bearer_NoSrcCheck(cucp_ue_e1ap_id)
-        return ue_id, self.contexts[ue_id].get_bearer_NoSrcCheck(cucp_ue_e1ap_id)
+        v = ue_id, self.contexts[ue_id].get_e1_bearer_NoSrcCheck(cucp_ue_e1ap_id)
+        return ue_id, self.contexts[ue_id].get_e1_bearer_NoSrcCheck(cucp_ue_e1ap_id)
 
     ####################################################################
     def hook_du_ue_ctx_creation(self, du_src: str, du_index: int, plmn: int, pci: int, crnti: int, tac: int, nci: int,  now: dt.datetime = None) -> None:
@@ -1560,7 +1711,6 @@ if __name__ == "__main__":
     ue_id = s.getid_by_du_index(du1_src, 0)
     assert ue_id == 1
     ue = s.getue_by_id(ue_id)
-    print(ue)
     assert ue is not None and ue.du_index == UniqueIndex("du1", 0) \
         and ue.cucp_index is None and ue.cuup_index is None \
         and ue.ran_unique_ue_id==RanUniqueUeId(plmn=101, pci=401, crnti=20000) and ue.nci==201 and ue.tac==12
@@ -2751,7 +2901,7 @@ if __name__ == "__main__":
         cgi_cellid=a.get("nr_cgi", {}).get("cell_id", None)
     )
     uectx = s.getue_by_id(0)
-    assert uectx is not None and asdict(uectx) == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': None, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [], 'tmsi': None, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_context_index': 0, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
     assert len(s.amf_contexts) == 1
     
     s.hook_core_amf_info_remove_ran(
@@ -2769,11 +2919,7 @@ if __name__ == "__main__":
         cgi_plmn=a.get("nr_cgi", {}).get("plmn_id", None),
         cgi_cellid=a.get("nr_cgi", {}).get("cell_id", None)
     )
-    assert uectx is not None and asdict(uectx) == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 
-                                                   'cuup_index': None, 
-                                                   'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 
-                                                   'e1_bearers': [], 'tmsi': None, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000},
-                                                   'core_amf_context_index': None, 'core_amf_info': None}
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}
     num_amf_contexts_associated_with_ue = sum(1 for v in s.amf_contexts.values() if v[0] is not None)
     
     ## Add it again
@@ -2796,7 +2942,7 @@ if __name__ == "__main__":
         cgi_cellid=a.get("nr_cgi", {}).get("cell_id", None)
     )
     uectx = s.getue_by_id(0)  
-    assert uectx is not None and asdict(uectx) == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'cuup_index': None, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'e1_bearers': [], 'tmsi': None, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_context_index': 0, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}, 'core_amf_info': {'suci': 'suci-0-001-01-0000-0-0-1230010004', 'supi': 'imsi-001011230010004', 'home_plmn_id': '001F01', 'current_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221226075}, 'next_guti': {'plmn_id': '999F99', 'amf_id': '20040', 'mtmsi': 3221225666}, 'tai': {'plmn_id': '00f110', 'tac': '1'}, 'cgi': {'plmn_id': '00f110', 'cell_id': '66c000'}, 'ngap_ids': {'ran_ue_ngap_id': 5000, 'amf_ue_ngap_id': 15000}}}
     assert len(s.amf_contexts) == 1
     num_amf_contexts_associated_with_ue = sum(1 for v in s.amf_contexts.values() if v[0] is not None)
     assert num_amf_contexts_associated_with_ue == 1
@@ -2925,6 +3071,99 @@ if __name__ == "__main__":
     num_amf_contexts_disassociated_with_ue = sum(1 for v in s.amf_contexts.values() if v[2] is not None)
     assert len(s.amf_contexts) == 0
 
+    print("#############################################################################")
+    print("# Test Nssap mappings")
+    s = UeContextsMap(dbg=dbg)
+
+    plmn = 101
+    pci =  400
+    crnti = 20000
+    du_src = 'du1'
+    du_index = 100
+    tac = 12
+    nci = 201
+    cucp_src = 'cucp1'
+    cucp_index = 200
+    cuup_src = 'cuup1'
+    cuup_index = 1400
+    gnb_cucp_ue_e1ap_id = 2000
+    gnb_cuup_ue_e1ap_id = 12000
+
+    
+    s.hook_du_ue_ctx_creation(  du_src, 
+                                du_index,
+                                plmn,
+                                pci,
+                                crnti,
+                                tac,
+                                nci)
+    s.hook_cucp_uemgr_ue_add(   cucp_src, 
+                                cucp_index,
+                                plmn,
+                                pci,
+                                crnti)
+   
+    uectx = s.getue_by_id(0)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12}
+
+    session1 = 1
+    session2 = 2
+    session3 = 3
+    sst1 = 1
+    sd1 = 162
+    sst2 = 1
+    sd2 = 163
+    drb1 = 1
+    drb2 = 2
+    drb3 = 3
+    drb4 = 4
+    # session1, with drbs 1-4
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb1)
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb2)
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb3)
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb4)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [1, 2, 3, 4]}}}
+
+    # trying adding drb1 again
+    uectx.pdu_session_add_update(session1, sst1, sd1, drb1)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [1, 2, 3, 4]}}}
+
+    # add drb4 to new session2
+    uectx.pdu_session_add_update(session2, sst2, sd2, drb4)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [1, 2, 3]}, 2: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [4]}}}
+
+    # create a new session3 using same sst/sd as session 2
+    uectx.pdu_session_add_update(session3, sst2, sd2, drb1)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {1: {'nssai': {'sst': 1, 'sd': 162}, 'drbs': [2, 3]}, 3: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [1]}}}
+
+    # test drb_nssai_map_get 
+    nssai = uectx.drb_nssai_map_get(drb1)
+    assert nssai == Nssai(sst=sst2, sd=sd2)
+    nssai = uectx.drb_nssai_map_get(drb2)
+    assert nssai == Nssai(sst=sst1, sd=sd1)
+    nssai = uectx.drb_nssai_map_get(drb3)
+    assert nssai == Nssai(sst=sst1, sd=sd1)
+    nssai = uectx.drb_nssai_map_get(drb4)
+    assert nssai is None
+    
+    # test pdu_session_remove 
+    uectx.pdu_session_remove(session1)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {3: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [1]}}}
+
+    nssai = uectx.drb_nssai_map_get(drb1)
+    assert nssai == Nssai(sst=sst2, sd=sd2)
+    nssai = uectx.drb_nssai_map_get(drb2)
+    assert nssai is None
+    nssai = uectx.drb_nssai_map_get(drb3)
+    assert nssai is None
+    nssai = uectx.drb_nssai_map_get(drb4)
+    assert nssai is None
+
+    # try to remove an unknwn session i
+    uectx.pdu_session_remove(10)
+    assert uectx is not None and uectx.concise_dict() == {'du_index': {'src': 'du1', 'idx': 100}, 'cucp_index': {'src': 'cucp1', 'idx': 200}, 'ran_unique_ue_id': {'plmn': 101, 'pci': 400, 'crnti': 20000}, 'nci': 201, 'tac': 12, 'pdu_sessions': {3: {'nssai': {'sst': 1, 'sd': 163}, 'drbs': [1]}}}
+
+    
     print("\n\n------ All tests passed ---------")
 
     sys.exit(0)

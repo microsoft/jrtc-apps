@@ -121,3 +121,42 @@ codelet_descriptor:
           protobuf:
             package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
             msg_name: e1ap_cuup_bearer_ctx_release
+
+  - codelet_name: cucp_pdu_session_bearer_setup
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/cucp_pdu_session_bearer_add_modify.o
+    hook_name: cucp_pdu_session_bearer_setup
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationNone
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:cucp_pdu_session_bearer_add_modify_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: cucp_pdu_session_bearer_add_modify
+
+  - codelet_name: cucp_pdu_session_bearer_modify
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/cucp_pdu_session_bearer_add_modify.o
+    hook_name: cucp_pdu_session_bearer_modify
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationNone
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:cucp_pdu_session_bearer_add_modify_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: cucp_pdu_session_bearer_add_modify
+
+  - codelet_name: cucp_pdu_session_remove
+    codelet_path: ${JBPF_CODELETS}/ue_contexts/cucp_pdu_session_remove.o
+    hook_name: cucp_pdu_session_remove
+    priority: 1
+    out_io_channel:
+      - name: output_map
+        forward_destination: DestinationNone
+        serde:
+          file_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts:cucp_pdu_session_remove_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/ue_contexts/ue_contexts.pb
+            msg_name: cucp_pdu_session_remove                       
