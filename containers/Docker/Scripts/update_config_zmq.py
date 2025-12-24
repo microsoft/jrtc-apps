@@ -30,29 +30,11 @@ def update_config(input_files, config_file, output_file, split):
         else:
             deep_merge(config_data['cell_cfg'], input_data.get('cell_cfg'), overwrite=True)
 
-
     # zmp cell params
     physicalCellID = input_data.get('zmq', {}).get('cell', {}).get('physicalCellID', None)
-    print("--------------- zmq ------")
-    print(input_data.get('zmq', {}))
-
     if physicalCellID is not None:
         config_data['cell_cfg']['pci'] = physicalCellID
         config_data['cells'][0]['pci'] = physicalCellID
-
-    print("--------------- cell_cfg------")
-    print(input_data.get('cell_cfg', {}))
-
-    # # cell_cfg.slicing
-    # slicing = input_data.get('cell_cfg', {}).get('slicing', None)
-    # if slicing is not None:
-    #     config_data['cell_cfg']['slicing'] = slicing
-
-    # # cell_cfg.tdd_ul_dl_cfg
-    # tdd_ul_dl_cfg = input_data.get('cell_cfg', {}).get('tdd_ul_dl_cfg', None)
-    # if tdd_ul_dl_cfg is not None:
-    #     config_data['cell_cfg']['tdd_ul_dl_cfg'] = tdd_ul_dl_cfg
-
 
     update_cucp(input_data, config_data)
 
