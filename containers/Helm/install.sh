@@ -124,9 +124,9 @@ fi
 SRSRAN_IMAGES="\
 --set-string         image.srs_jbpf=ghcr.io/microsoft/jrtc-apps/srs-jbpf:$SRSRAN_IMAGE_TAG \
 --set-string         image.srs_jbpf_proxy=ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:$SRSRAN_IMAGE_TAG \
+--set-string         image.srs_jbpf_zmq=ghcr.io/microsoft/jrtc-apps/srs-jbpf-zmq:$SRSRAN_IMAGE_TAG \
+--set-string         image.srs_ue=ghcr.io/microsoft/jrtc-apps/srs-ue:$SRSRAN_IMAGE_TAG \
 "
-
-
 kubectl create namespace ran || true
 
 
