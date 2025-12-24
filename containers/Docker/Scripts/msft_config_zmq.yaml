@@ -65,6 +65,10 @@ cell_cfg:
       sst: 1
       sd: 165
 
+cells:
+  - pci: 1
+    dl_arfcn: 368500
+
 ru_sdr:
   device_driver: zmq
   device_args: tx_port=tcp://0.0.0.0:$ZMQ_TX_PORT,rx_port=tcp://$ZMQ_RX_ADDR:$ZMQ_RX_PORT,base_srate=11.52e6
