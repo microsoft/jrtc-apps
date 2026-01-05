@@ -46,7 +46,9 @@ if params.include_ue_contexts:
     ue_contexts = sys.modules.get('ue_contexts')
     from ue_contexts import struct__du_ue_ctx_creation, struct__du_ue_ctx_update_crnti, struct__du_ue_ctx_deletion, \
                             struct__cucp_ue_ctx_creation, struct__cucp_ue_ctx_update, struct__cucp_ue_ctx_deletion, \
-                            struct__e1ap_cucp_bearer_ctx_setup, struct__e1ap_cuup_bearer_ctx_setup, struct__e1ap_cuup_bearer_ctx_release
+                            struct__e1ap_cucp_bearer_ctx_setup, struct__e1ap_cuup_bearer_ctx_setup, struct__e1ap_cuup_bearer_ctx_release, \
+                            struct__cucp_pdu_session_bearer_add_modify, struct__cucp_pdu_session_remove
+
 
 if params.include_perf:
     jbpf_stats_report = sys.modules.get('jbpf_stats_report')
@@ -407,7 +409,7 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                     data = data_ptr.contents
                     state.ue_map.hook_cucp_uemgr_ue_add(
                                         deviceid,
-                                        data.cucp_ue_index,    
+                                        data.cucp_ue_index,
                                         data.plmn,
                                         data.pci,
                                         data.crnti)
@@ -523,6 +525,83 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                                         data.cucp_ue_e1ap_id,
                                         data.cuup_ue_e1ap_id,
                                         data.success)
+
+                    state.logger.log_msg(log_enabled, rlog_enabled, "Dashboard", f"{json.dumps(output)}")
+
+                elif stream_idx == CUCP_PDU_SESSION_BEARER_SETUP_SIDX:
+
+                    data_ptr = ctypes.cast(
+                        data_entry.data, ctypes.POINTER(struct__cucp_pdu_session_bearer_add_modify)
+                    )
+                    data = data_ptr.contents
+
+                    ueid = state.ue_map.getid_by_cucp_index(deviceid, data.cucp_ue_index)
+                    uectx = state.ue_map.getuectx(ueid)
+
+                    if uectx:
+                        uectx.pdu_session_add_update(data.pdu_session_id, data.nssai.sst, data.nssai.sd, data.drb_id)
+
+                    output = {
+                        "timestamp": data.timestamp,
+                        "stream_index": "CUCP_PDU_SESSION_BEARER_SETUP_SIDX",
+                        "ueid": ueid,
+                        "ue_ctx": None if uectx is None else uectx.concise_dict(),
+                        "cucp_ue_index": data.cucp_ue_index,
+                        "pdu_session_id": data.pdu_session_id,
+                        "drb_id": data.drb_id,
+                        "nssai": f"{data.nssai.sst}:{data.nssai.sd}",
+                    }
+
+                    state.logger.log_msg(log_enabled, rlog_enabled, "Dashboard", f"{json.dumps(output)}")
+
+                elif stream_idx == CUCP_PDU_SESSION_BEARER_MODIFY_SIDX:
+
+                    data_ptr = ctypes.cast(
+                        data_entry.data, ctypes.POINTER(struct__cucp_pdu_session_bearer_add_modify)
+                    )
+                    data = data_ptr.contents
+
+                    ueid = state.ue_map.getid_by_cucp_index(deviceid, data.cucp_ue_index)
+                    uectx = state.ue_map.getuectx(ueid)
+
+                    if uectx:
+                        uectx.pdu_session_add_update(data.pdu_session_id, data.nssai.sst, data.nssai.sd, data.drb_id)
+
+                    output = {
+                        "timestamp": data.timestamp,
+                        "stream_index": "CUCP_PDU_SESSION_BEARER_MODIFY_SIDX",
+                        "ueid": ueid,
+                        "ue_ctx": None if uectx is None else uectx.concise_dict(),
+                        "cucp_ue_index": data.cucp_ue_index,
+                        "pdu_session_id": data.pdu_session_id,
+                        "drb_id": data.drb_id,
+                        "nssai": f"{data.nssai.sst}:{data.nssai.sd}",
+                    }
+                    state.logger.log_msg(log_enabled, rlog_enabled, "Dashboard", f"{json.dumps(output)}")
+
+                elif stream_idx == CUCP_PDU_SESSION_REMOVE_SIDX:
+                    
+                    data_ptr = ctypes.cast(
+                        data_entry.data, ctypes.POINTER(struct__cucp_pdu_session_remove)
+                    )
+                    data = data_ptr.contents
+
+                    ueid = state.ue_map.getid_by_cucp_index(deviceid, data.cucp_ue_index)
+                    uectx = state.ue_map.getuectx(ueid)
+                    
+                    output = {
+                        "timestamp": data.timestamp,
+                        "stream_index": "CUCP_PDU_SESSION_REMOVE_SIDX",
+                        "ueid": ueid,
+                        "ue_ctx": None if uectx is None else uectx.concise_dict(),
+                        "cucp_ue_index": data.cucp_ue_index,
+                        "pdu_session_id": data.pdu_session_id,
+                        "drb_id": data.drb_id,
+                        "nssai": f"{data.nssai.sst}:{data.nssai.sd}",
+                    }
+
+                    if uectx:
+                        uectx.pdu_session_remove(data.pdu_session_id)
 
                     state.logger.log_msg(log_enabled, rlog_enabled, "Dashboard", f"{json.dumps(output)}")
 
@@ -808,6 +887,11 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                         if uectx is None:
                             s['du_ue_index'] = stat.du_ue_index
 
+                        if uectx and (not stat.is_srb):
+                            nssai = uectx.drb_nssai_map_get(stat.rb_id)
+                            if nssai:
+                                s["nssai"] = f"{nssai}"
+
                         if stat.sdu_queue_pkts.count > 0:
                             s["sdu_queue_pkts"] = {
                                 "count": stat.sdu_queue_pkts.count,
@@ -929,7 +1013,6 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                     if len(output["stats"]) > 0:
                         state.logger.log_msg(log_enabled, rlog_enabled, "Dashboard", f"{json.dumps(output)}")
 
-
                 elif stream_idx == RLC_UL_STATS_SIDX:
 
                     data_ptr = ctypes.cast(
@@ -960,6 +1043,11 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
 
                         if uectx is None:
                             s['du_ue_index'] = stat.du_ue_index
+
+                        if uectx and (not stat.is_srb):
+                            nssai = uectx.drb_nssai_map_get(stat.rb_id)
+                            if nssai:
+                                s["nssai"] = f"{nssai}"
 
                         if stat.pdu_bytes.count > 0:
                             s["pdu_bytes"] = {
@@ -1055,6 +1143,11 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                         if uectx is None:
                             s[ue_index_key] = stat.cu_ue_index
 
+                        if uectx and (not stat.is_srb):
+                            nssai = uectx.drb_nssai_map_get(stat.rb_id)
+                            if nssai:
+                                s["nssai"] = f"{nssai}"
+
                         if stat.sdu_new_bytes.count > 0:
                             s["sdu_new_bytes"] = {
                                 "count": stat.sdu_new_bytes.count,
@@ -1126,7 +1219,6 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                     if len(output["stats"]) > 0:
                         state.logger.log_msg(log_enabled, rlog_enabled, "Dashboard", f"{json.dumps(output)}")
 
-
                 elif stream_idx == PDCP_UL_STATS_SIDX:
 
                     data_ptr = ctypes.cast(
@@ -1164,6 +1256,11 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                         if uectx is None:
                             s[ue_index_key] = stat.cu_ue_index
 
+                        if uectx and (not stat.is_srb):
+                            nssai = uectx.drb_nssai_map_get(stat.rb_id)
+                            if nssai:
+                                s["nssai"] = f"{nssai}"
+                            
                         if stat.sdu_delivered_bytes.count > 0:
                             s["sdu_delivered_bytes"] = {
                                 "count": stat.sdu_delivered_bytes.count,
@@ -1213,7 +1310,6 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
 
                     if len(output["stats"]) > 0:
                         state.logger.log_msg(log_enabled, rlog_enabled, "Dashboard", f"{json.dumps(output)}")
-
 
                 #####################################################
                 ### MAC
@@ -1763,6 +1859,9 @@ def jrtc_start_app(capsule):
     global UECTX_CUCP_E1AP_BEARER_SETUP_SIDX 
     global UECTX_CUUP_E1AP_BEARER_SETUP_SIDX
     global UECTX_CUUP_E1AP_BEARER_DEL_SIDX
+    global CUCP_PDU_SESSION_BEARER_SETUP_SIDX
+    global CUCP_PDU_SESSION_BEARER_MODIFY_SIDX
+    global CUCP_PDU_SESSION_REMOVE_SIDX
     global MAC_SCHED_CRC_STATS_SIDX
     global MAC_SCHED_BSR_STATS_SIDX
     global MAC_SCHED_PHR_STATS_SIDX
@@ -1800,6 +1899,9 @@ def jrtc_start_app(capsule):
     UECTX_CUCP_E1AP_BEARER_SETUP_SIDX = -1
     UECTX_CUUP_E1AP_BEARER_SETUP_SIDX = -1
     UECTX_CUUP_E1AP_BEARER_DEL_SIDX = -1
+    CUCP_PDU_SESSION_BEARER_SETUP_SIDX = -1
+    CUCP_PDU_SESSION_BEARER_MODIFY_SIDX = -1
+    CUCP_PDU_SESSION_REMOVE_SIDX = -1
     MAC_SCHED_CRC_STATS_SIDX = -1
     MAC_SCHED_BSR_STATS_SIDX = -1
     MAC_SCHED_PHR_STATS_SIDX = -1
@@ -1991,7 +2093,44 @@ def jrtc_start_app(capsule):
         state.logger.log_msg(True, False, "", f"UECTX_CUUP_E1AP_BEARER_DEL_SIDX: {UECTX_CUUP_E1AP_BEARER_DEL_SIDX}")
         last_cnt += 1
 
+        streams.append(JrtcStreamCfg_t(
+            JrtcStreamIdCfg_t(
+                JRTC_ROUTER_REQ_DEST_ANY, 
+                JRTC_ROUTER_REQ_DEVICE_ID_ANY, 
+                b"dashboard://jbpf_agent/ue_contexts/cucp_pdu_session_bearer_setup", 
+                b"output_map"),
+            True,   # is_rx
+            None    # No AppChannelCfg 
+        ))
+        CUCP_PDU_SESSION_BEARER_SETUP_SIDX = last_cnt
+        state.logger.log_msg(True, False, "", f"CUCP_PDU_SESSION_BEARER_SETUP_SIDX: {CUCP_PDU_SESSION_BEARER_SETUP_SIDX}")
+        last_cnt += 1
 
+        streams.append(JrtcStreamCfg_t(
+            JrtcStreamIdCfg_t(
+                JRTC_ROUTER_REQ_DEST_ANY, 
+                JRTC_ROUTER_REQ_DEVICE_ID_ANY, 
+                b"dashboard://jbpf_agent/ue_contexts/cucp_pdu_session_bearer_modify", 
+                b"output_map"),
+            True,   # is_rx
+            None    # No AppChannelCfg 
+        ))
+        CUCP_PDU_SESSION_BEARER_MODIFY_SIDX = last_cnt
+        state.logger.log_msg(True, False, "", f"CUCP_PDU_SESSION_BEARER_MODIFY_SIDX: {CUCP_PDU_SESSION_BEARER_MODIFY_SIDX}")
+        last_cnt += 1
+
+        streams.append(JrtcStreamCfg_t(
+            JrtcStreamIdCfg_t(
+                JRTC_ROUTER_REQ_DEST_ANY, 
+                JRTC_ROUTER_REQ_DEVICE_ID_ANY, 
+                b"dashboard://jbpf_agent/ue_contexts/cuup_pdu_session_remove", 
+                b"output_map"),
+            True,   # is_rx
+            None    # No AppChannelCfg 
+        ))
+        CUCP_PDU_SESSION_REMOVE_SIDX = last_cnt
+        state.logger.log_msg(True, False, "", f"CUCP_PDU_SESSION_REMOVE_SIDX: {CUCP_PDU_SESSION_REMOVE_SIDX}")
+        last_cnt += 1
 
     #####################################################
     ### Perf

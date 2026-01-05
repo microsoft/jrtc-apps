@@ -129,7 +129,7 @@ uint64_t jbpf_main(void* state)
             return JBPF_CODELET_FAILURE;
         }        
 
-        jbpf_printf_debug("slice-allocation INDICATION sent to higher layers\n");
+        //jbpf_printf_debug("SLICE_ALLOC_IND sent to higher layers\n");
 
         // clear trigger flag
         *indication_triggered = 0;
@@ -138,18 +138,18 @@ uint64_t jbpf_main(void* state)
     // get request from "slice_request_map"
     if (jbpf_control_input_receive(&slice_request_map, input_req_tmp, sizeof(slice_mgmt_req)) > 0) {
 
-        if (input_req_tmp->msg_type == slice_mgmt_msg_type_GET_SLICE_ALLOC) {
+        if (input_req_tmp->msg_type == slice_mgmt_msg_type_SLICE_ALLOC_GET) {
 
-            jbpf_printf_debug("GET_SLICE_ALLOC received from higher layers.\n");
+            //jbpf_printf_debug("SLICE_ALLOC_GET received from higher layers.\n");
 
             // request received to send latest slice config to higher layer app
 
             // set flag to send cfg to higher layer app
             *indication_triggered = 1;
 
-        } else if (input_req_tmp->msg_type == slice_mgmt_msg_type_SET_SLICE_ALLOC) {
+        } else if (input_req_tmp->msg_type == slice_mgmt_msg_type_SLICE_ALLOC_SET) {
 
-            jbpf_printf_debug("SET_SLICE_ALLOC received from higher layers\n");
+            //jbpf_printf_debug("SLICE_ALLOC_SET received from higher layers\n");
 
             // request received to set new slice config
             
@@ -178,8 +178,6 @@ uint64_t jbpf_main(void* state)
 
         // update the RAN now if sf/slot matches.
         if (update_ran_now) {
-
-            jbpf_printf_debug("New slice-allocation will be configured now (sfn/slot=%d/%d) \n", sfn, slot_index);
 
             // clear flag so we dont repeatedly process the request
             set_request->requested = 0;            

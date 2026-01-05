@@ -10,32 +10,27 @@ allocation data, and periodically issues slice allocation updates. The app
 supports both local logging and optional remote logging to Azure Log Analytics.
 
 Key features:
+- All confif parameters are set in slice_mgmt_app_params.py.
 - Initializes a JRTC application with request and indication streams for slice management.
 - Sends an initial GET request to retrieve current slice allocations.
 - Processes slice allocation indications, logs details, and stores state.
-- Periodically sends SET_SLICE_ALLOC requests to update slice allocations.
-- For the first SET_SLICE_ALLOC request, the min_prb_policy_ratio/min_prb_policy_ratio/priority fields are set to 0/40/1 and 0/60/1 for slices 0 and 1 respectively.  For subsequent SET_SLICE_ALLOC requests, these values are swapped.
+- Periodically sends SLICE_ALLOC_SET requests to update slice allocations.  The periodicity is set by config parameter "slice_update_periodicity_secs".
+- For the first SLICE_ALLOC_SET request, the min_prb_policy_ratio/min_prb_policy_ratio/priority fields are set to 0/30/1 and 0/70/1 for slices 0 and 1 respectively.  For subsequent SLICE_ALLOC_SET requests, these values are swapped.
+  Note that 30 and 70 are the slice_prb_percentage_low and slice_prb_percentage_high config parameters.
 - If you were to do a Iperf test on one of the slices, you should see performance figures as these ..
 
-    [  5]  22.00-23.00  sec  20.7 MBytes   173 Mbits/sec  0.062 ms  21475/37881 (57%)
-    [  5]  23.00-24.00  sec  21.2 MBytes   177 Mbits/sec  0.057 ms  21016/37820 (56%)
-    [  5]  24.00-25.00  sec  21.3 MBytes   178 Mbits/sec  0.073 ms  21018/37900 (55%) 
-    [  5]  25.00-26.00  sec  17.4 MBytes   146 Mbits/sec  0.088 ms  23055/36899 (62%)   <----- slice max_prb_policy_ratio changes from 60% to 40% here
-    [  5]  26.00-27.00  sec  15.0 MBytes   125 Mbits/sec  0.107 ms  26198/38079 (69%)
-    [  5]  27.00-28.00  sec  14.7 MBytes   124 Mbits/sec  0.141 ms  25934/37632 (69%)
-    [  5]  28.00-29.00  sec  14.7 MBytes   124 Mbits/sec  0.077 ms  26437/38132 (69%)
-    [  5]  29.00-30.00  sec  14.5 MBytes   122 Mbits/sec  0.150 ms  25878/37395 (69%)
-    ...
-    ...
-    [  5]  82.00-83.00  sec  15.3 MBytes   128 Mbits/sec  0.095 ms  25784/37903 (68%)
-    [  5]  84.00-85.00  sec  15.0 MBytes   125 Mbits/sec  0.093 ms  26922/38805 (69%)
-    [  5]  85.00-86.00  sec  15.2 MBytes   128 Mbits/sec  0.070 ms  24728/36817 (67%)
-    [  5]  86.00-87.00  sec  15.9 MBytes   134 Mbits/sec  0.249 ms  26566/39225 (68%)   <----- slice max_prb_policy_ratio changes from 40% to 60% here
-    [  5]  87.00-88.00  sec  21.1 MBytes   177 Mbits/sec  0.502 ms  20966/37714 (56%)
-    [  5]  88.00-89.00  sec  21.0 MBytes   176 Mbits/sec  0.170 ms  21210/37919 (56%)
-    [  5]  89.00-90.00  sec  20.8 MBytes   175 Mbits/sec  0.075 ms  21313/37852 (56%)
-"""
+    [  5] 308.00-309.00 sec  63.5 MBytes   533 Mbits/sec  0.026 ms  24964/75429 (33%)
+    [  5] 309.00-310.00 sec  67.2 MBytes   564 Mbits/sec  0.037 ms  22441/75827 (30%)
+    [  5] 310.00-311.00 sec  64.3 MBytes   539 Mbits/sec  0.054 ms  24666/75753 (33%)
+    [  5] 311.00-312.00 sec  37.2 MBytes   312 Mbits/sec  0.034 ms  45900/75417 (61%)  <----- slice max_prb_policy_ratio changes here
+    [  5] 312.00-313.00 sec  28.5 MBytes   239 Mbits/sec  0.061 ms  53129/75790 (70%)
+    [  5] 313.00-314.00 sec  27.8 MBytes   233 Mbits/sec  0.033 ms  53764/75875 (71%)
+    [  5] 314.00-315.00 sec  25.0 MBytes   210 Mbits/sec  0.030 ms  55594/75475 (74%)
+    [  5] 315.00-316.00 sec  23.8 MBytes   200 Mbits/sec  0.041 ms  57172/76083 (75%)
+    [  5] 316.00-317.00 sec  27.2 MBytes   229 Mbits/sec  0.061 ms  53954/75599 (71%)
+    [  5] 317.00-318.00 sec  28.9 MBytes   242 Mbits/sec  0.035 ms  52808/75727 (70%)
 
+"""
 
 import time
 import json
@@ -77,7 +72,7 @@ if params.la_enabled:
     from la_logger import LaLogger, LaLoggerConfig
 
 slice_mgmt = sys.modules.get('slice_mgmt')
-from slice_mgmt import slice_mgmt_req, slice_mgmt_ind, slice_t, slice_mgmt_msg_type_GET_SLICE_ALLOC, slice_mgmt_msg_type_SET_SLICE_ALLOC
+from slice_mgmt import slice_mgmt_req, slice_mgmt_ind, slice_t, slice_mgmt_msg_type_SLICE_ALLOC_GET, slice_mgmt_msg_type_SLICE_ALLOC_SET
 
 
 rlog_enabled = False
@@ -119,22 +114,22 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                 ## timeout processing
                 state.logger.process_timeout()
 
-                # on first entry, issue a GET_SLICE_ALLOC request
+                # on first entry, issue a SLICE_ALLOC_GET request
                 if state.initial_get_requested is False:
 
                     # send GET to the codelet
     
                     req = slice_mgmt_req()
-                    req.msg_type = slice_mgmt_msg_type_GET_SLICE_ALLOC
+                    req.msg_type = slice_mgmt_msg_type_SLICE_ALLOC_GET
                     req.has_set_req = False
 
                     # Convert to raw bytes
                     data_len = ctypes.sizeof(req)
                     data_to_send = ctypes.string_at(ctypes.byref(req), data_len)
 
-                    state.logger.log_msg(True, False, "", "slice_mgmt_app: Sending GET_SLICE_ALLOC request")
+                    state.logger.log_msg(True, False, "", "slice_mgmt_app: Sending SLICE_ALLOC_GET request")
 
-                    # Send the GET_SLICE_ALLOC request to the codelet
+                    # Send the SLICE_ALLOC_GET request to the codelet
                     res = jrtc_app_router_channel_send_input_msg(
                         state.app, SLICE_MGMT_REQ_SIDX, data_to_send, data_len
                     )
@@ -157,10 +152,10 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                         s0, s1 = state.slice_allocation.slice[0], state.slice_allocation.slice[1]
                         if not state.first_request_sent:
                             s0.min_prb_policy_ratio = 0
-                            s0.max_prb_policy_ratio = 40
+                            s0.max_prb_policy_ratio = params.slice_prb_percentage_low
                             s0.priority = 1
                             s1.min_prb_policy_ratio = 0
-                            s1.max_prb_policy_ratio = 60
+                            s1.max_prb_policy_ratio = params.slice_prb_percentage_high
                             s0.priority = 1
                         else:
                             for attr in ("min_prb_policy_ratio", "max_prb_policy_ratio", "priority"):
@@ -168,13 +163,13 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                                 setattr(s0, attr, getattr(s1, attr))
                                 setattr(s1, attr, tmp)
 
-                        state.logger.log_msg(True, False, "", f"slice_mgmt_app: Sending SET_SLICE_ALLOC:    sfn {state.slice_allocation.sfn} slot_index {state.slice_allocation.slot_index} num custom slices {state.slice_allocation.slice_count}")
+                        state.logger.log_msg(True, False, "", f"slice_mgmt_app: Sending SLICE_ALLOC_SET:    sfn {state.slice_allocation.sfn} slot_index {state.slice_allocation.slot_index} num custom slices {state.slice_allocation.slice_count}")
                         slices = list(state.slice_allocation.slice)
                         for i in range(state.slice_allocation.slice_count):
                             state.logger.log_msg(True, False, "", f"slice_mgmt_app:   slice {i} : pci  {slices[i].pci} nssai {slices[i].nssai.sst}/{slices[i].nssai.sd} min {slices[i].min_prb_policy_ratio} max {slices[i].max_prb_policy_ratio} priority {slices[i].priority}")
                     
                         req = slice_mgmt_req()
-                        req.msg_type = slice_mgmt_msg_type_SET_SLICE_ALLOC
+                        req.msg_type = slice_mgmt_msg_type_SLICE_ALLOC_SET
                         req.has_set_req = True
                         req.set_req.has_sfn = (params.slice_update_sfn is not None)
                         if req.set_req.has_sfn:
@@ -189,7 +184,7 @@ def app_handler(timeout: bool, stream_idx: int, data_entry: struct_jrtc_router_d
                         data_len = ctypes.sizeof(req)
                         data_to_send = ctypes.string_at(ctypes.byref(req), data_len)
 
-                        # Send the SET_SLICE_ALLOC request to the codelet
+                        # Send the SLICE_ALLOC_SET request to the codelet
                         res = jrtc_app_router_channel_send_input_msg(
                             state.app, SLICE_MGMT_REQ_SIDX, data_to_send, data_len
                         )
