@@ -262,6 +262,13 @@ dmimo:
 
 zmq:
   enabled: False
+  triggerFiles:
+    hostPath: /var/tmp/zmq-triggers
+    mountPath: /zmq-triggers
+    startGRC: zmq-trigger-grc
+    startConnections: zmq-trigger-connections
+    startTraffic: zmq-trigger-traffic
+    pollSeconds: 2
   cell:
     cellID: 1000
     physicalCellID: 100
@@ -284,6 +291,15 @@ zmq:
       imei: "353490069873310"
       apn: "internet"
       pathloss: 0
+      iperf3:
+        automatic: True
+        server: "192.168.100.13"
+        port: 5301
+        bw: "10M"
+        cmd_options: "-w8M -l1320"
+        duration: "10000"
+        udp: True
+        downlink: true
     ue2:
       tx_port: 2201
       rx_port: 2200
@@ -291,6 +307,15 @@ zmq:
       imei: "353490069873311"
       apn: "internet2"
       pathloss: 0
+      iperf3:
+        automatic: True
+        server: "192.168.100.13"
+        port: 5302
+        bw: "10M"
+        cmd_options: "-w8M -l1320"
+        duration: "10000"
+        udp: True
+        downlink: true
 
 
 # If enabled, the chart doesn't start executables in the containers, 
@@ -311,6 +336,7 @@ log:
   ofh_level: warning
   radio_level: warning
   hal_level: warning
+  cu_level: info
 
 # Also metrics, pcap
 

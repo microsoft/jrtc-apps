@@ -30,7 +30,7 @@ def update_config(input_files, config_file, output_file, split):
         else:
             deep_merge(config_data['cell_cfg'], input_data.get('cell_cfg'), overwrite=True)
 
-    # zmp cell params
+    # zmq cell params
     physicalCellID = input_data.get('zmq', {}).get('cell', {}).get('physicalCellID', None)
     if physicalCellID is not None:
         config_data['cell_cfg']['pci'] = physicalCellID

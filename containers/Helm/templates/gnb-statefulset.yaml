@@ -192,14 +192,10 @@ spec:
           readOnly: true
 
         command: ["/bin/sh", "-c"]
-        {{- if  $.Values.debug_mode.enabled }}
-        args: [ "sleep 99999999d" ]
-        {{- else }}
         {{- if  $.Values.zmq.enabled }}            
         args: [ "/opt/Scripts/run_zmq.sh" ]
         {{- else }}
         args: [ "/opt/Scripts/run.sh" ]
-        {{- end }}
         {{- end }}
         env:
           - name: DEBUG_MODE
@@ -223,8 +219,7 @@ spec:
             - SYS_NICE
         tty: true
         stdin: true
-
-
+  
         resources:
           limits:
             cpu: {{ $.Values.resources.gnb.limits.cpu }}

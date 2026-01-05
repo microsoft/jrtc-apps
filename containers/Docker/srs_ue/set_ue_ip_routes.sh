@@ -37,23 +37,13 @@ setup_ue_routing() {
 
     # Create table 100 routes
     set -x
-    ip route add "$UE_NET" dev "$TUN_IF" proto kernel scope link src "$UE_IP" table 100 2>/dev/null || {
-        echo "Error: Route $UE_NET already exists or failed"
-        set +x
-        return 1
-    }
+    ip route replace "$UE_NET" dev "$TUN_IF" proto kernel scope link src "$UE_IP" table 100
+    ip route replace default via "$UE_GW" dev "$TUN_IF" table 100
 
-    ip route add default via "$UE_GW" dev "$TUN_IF" table 100 2>/dev/null || {
-        echo "Error: Default route via $UE_GW failed or already exists"
-        set +x
-        return 1
-    }
-
-    ip rule add from "$UE_IP" table 100 2>/dev/null || {
-        echo "Error: Rule from $UE_IP failed or already exists"
-        set +x
-        return 1
-    }
+    # Add rule only if missing
+    if ! ip rule show | grep -q "from $UE_IP.*lookup 100"; then
+        ip rule add from "$UE_IP" table 100
+    fi
     set +x
 
     echo "Policy routing set for $TUN_IF: $UE_IP/$UE_PREFIX via $UE_GW"
