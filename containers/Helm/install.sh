@@ -6,10 +6,9 @@ set -euo pipefail
 #######################################
 
 CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
-
-init_env() {
-    source "$(dirname "$(dirname "$CURRENT_DIR")")/set_vars.sh"
-}
+source "$(dirname "$(dirname "$CURRENT_DIR")")/set_vars.sh"
+source "$CURRENT_DIR/zmq_helpers.sh"
+source "$CURRENT_DIR/helpers.sh"
 
 #######################################
 # Helpers
@@ -89,10 +88,7 @@ process_values_files() {
     EXTRA_VALUES_SUMMARY=""
 
     for values_file in $VALUES_FILES; do
-        if [ ! -f "$values_file" ]; then
-            echo "Values file does not exist: $values_file"
-            exit 1
-        fi
+        [ -f "$values_file" ] || fatal "Values file does not exist: $values_file"
         EXTRA_VALUES+=" -f $values_file"
         EXTRA_VALUES_SUMMARY+=" $values_file"
     done
@@ -200,10 +196,10 @@ print_summary() {
     echo "Custom image tags (if any):"
     print_image_tag "srs" "$CUSTOM_VALUES"
 
-    jrtc_enabled=$(echo "$ALL_VALUES" | jq -r '.jbpf.cfg.jbpf_enable_ipc')
+    jrtc_enabled=$(jq_required "$ALL_VALUES" '.jbpf.cfg.jbpf_enable_ipc')
     echo -e "\nJRTC enabled: $jrtc_enabled"    
 
-    zmq_enabled=$(echo "$ALL_VALUES" | jq -r '.zmq.enabled')
+    zmq_enabled=$(jq_required "$ALL_VALUES" '.zmq.enabled')
     echo -e "\nZMQ enabled: $zmq_enabled"    
 
     if [ ! "$zmq_enabled" == "true" ]; then
@@ -229,32 +225,34 @@ wait_pod_ready() {
     local namespace=$1
     local podname=$2
     local timeout=$3
-    echo -e "\nWaiting for $podname to be in Ready state"
+    echo -e "\nWaiting for "$podname" to be in Ready state"
     kubectl wait \
-        -n $namespace \
+        -n "$namespace" \
         --for=condition=Ready \
-        pod/$podname \
-        --timeout=$timeout
+        pod/"$podname" \
+        --timeout="$timeout" \
+    || fatal "Pod $podname in namespace $namespace did not become Ready within $timeout"
+
     echo "$podname is now in Ready state"
 }
 
 wait_jrtc_ready() {
     if [ "$jrtc_enabled" == "1" ]; then
         local namespace="ran"
-        local podname=$(kubectl -n $namespace get pods -l app=jrtc-service -o jsonpath='{.items[*].metadata.name}')
-        wait_pod_ready ran $podname 5m
+        local podname=$(kubectl -n "$namespace" get pods -l app=jrtc-service -o jsonpath='{.items[*].metadata.name}')
+        wait_pod_ready "$namespace" "$podname" 5m
     fi
 }
 
 wait_gnb_ready() {
     local namespace="ran"
-    local podname=$(kubectl -n $namespace get pods -l app=srs-gnb-du1 -o jsonpath='{.items[*].metadata.name}')
-    wait_pod_ready ran $podname 5m
+    local podname=$(kubectl -n "$namespace" get pods -l app=srs-gnb-du1 -o jsonpath='{.items[*].metadata.name}')
+    wait_pod_ready "$namespace" "$podname" 5m
 }
 
 wait_gnb_amf_connected() {
     local namespace="ran"
-    local podname=$(kubectl -n $namespace get pods -l app=srs-gnb-du1 -o jsonpath='{.items[*].metadata.name}')
+    local podname=$(kubectl -n "$namespace" get pods -l app=srs-gnb-du1 -o jsonpath='{.items[*].metadata.name}')
     local container="gnb"
     local pattern="N2: Connection to AMF"
     local timeout=60    # seconds
@@ -266,7 +264,7 @@ wait_gnb_amf_connected() {
 
         if kubectl -n "$namespace" logs "$podname" -c "$container" --tail=20 2>/dev/null | grep -q "$pattern"; then
             echo -e " ✅ gNB successfully connected to AMF\n"
-            return 0
+            return
         fi
 
         # Print a dot for each iteration
@@ -275,8 +273,7 @@ wait_gnb_amf_connected() {
         elapsed=$((elapsed + interval))
     done
 
-    echo " ❌ Timeout waiting for gNB to connect to AMF after ${timeout}s" >&2
-    return 1
+    fatal "Timeout waiting for gNB to connect to AMF after ${timeout}s"
 }
 
 
@@ -291,137 +288,15 @@ autoload_codeletSets() {
         pushd .
         cd $JRTC_APPS_DIR
         echo "Loading $c"
-        ./load.sh -y "$c"
-        popd
+        ./load.sh -y "$c" 
+        status=$?           # capture exit status
+        popd > /dev/null    # return to original dir
+        if [ $status -ne 0 ]; then
+            fatal "Failure when loading $c"
+        fi        
     done
 }
 
-
-#######################################
-# zmq procedures
-#######################################
-
-zmq_clear_triggers() {
-    zmq=$(echo "$ALL_VALUES" | jq -r '.zmq')
-
-    if [ -z "$zmq" ]; then
-        # echo "ZMQ section is missing or empty in ALL_VALUES. Exiting."
-        return 1
-    fi
-
-    zmq_enabled=$(echo "$zmq" | jq -r '.enabled')
-    zmq_host_path=$(echo "$zmq" | jq -r '.triggerFiles.hostPath')
-    zmq_start_grc_file=$(echo "$zmq" | jq -r '.triggerFiles.startGRC')
-    zmq_start_connections_file=$(echo "$zmq" | jq -r '.triggerFiles.startConnections')
-    zmq_start_traffic_file=$(echo "$zmq" | jq -r '.triggerFiles.startTraffic')
-
-    if [ -z "$zmq_host_path" ]; then
-        # Host path is empty or missing. Skipping trigger cleanup."
-        return
-    fi
-
-    for f in "$zmq_start_connections_file" "$zmq_start_traffic_file"; do
-        if [ -z "$f" ]; then
-            # "Skipping empty trigger file entry."
-            continue
-        fi
-
-        full_path="$zmq_host_path/$f"
-        if [ -f "$full_path" ]; then
-            echo "Removing trigger file: $full_path"
-            sudo rm -f "$full_path"
-        fi
-    done
-}
-
-zmq_wait_grc() {
-    echo -e "\nWaiting for GRC complete its in initialisation"
-
-    local namespace="ran"
-    local podname=$(kubectl -n $namespace get pods -l app=srs-grc-du1 -o jsonpath='{.items[*].metadata.name}')
-    local container="grc"
-    local pattern="Starting flowgraph"
-    local timeout=60    # seconds
-    local interval=1    # seconds between checks
-    local elapsed=0
-
-    while [ $elapsed -lt $timeout ]; do
-
-        if kubectl -n "$namespace" logs "$podname" -c "$container" --tail=20 2>/dev/null | grep -q "$pattern"; then
-            echo -e " ✅ GRC initialisation completed\n"
-            return 0
-        fi
-
-        # Print a dot for each iteration
-        echo -n "."
-        sleep $interval
-        elapsed=$((elapsed + interval))
-    done
-
-    echo " ❌ Timeout waiting for GRC to complete its initialisation after ${timeout}s" >&2
-    return 1
-}
-
-zmq_trigger_and_wait_grc() {
-    echo -e "\nTriggering ZMQ GRC container"
-    sudo mkdir -p $zmq_host_path
-    sudo touch $zmq_host_path/$zmq_start_grc_file
-    zmq_wait_grc
-}
-
-zmq_wait_ue_connection() {
-    local i=$1
-    local podname=$2
-    local namespace="ran"
-    local container="ue"
-    local pattern="PDU Session Establishment successful"
-    local timeout=60    # seconds
-    local interval=1    # seconds between checks
-    local elapsed=0
-
-    echo -e "\nWaiting for UE-$i to complete PDU Session Establishment"
-    while [ $elapsed -lt $timeout ]; do
-
-        if kubectl -n "$namespace" logs "$podname" -c "$container" --tail=20 2>/dev/null | grep -q "$pattern"; then
-            echo -e " ✅ UE-$i successfully completed PDU Session Establishment\n"
-            return 0
-        fi
-
-        # Print a dot for each iteration
-        echo -n "."
-        sleep $interval
-        elapsed=$((elapsed + interval))
-    done
-
-    echo " ❌ Timeout waiting for UE-$i to complete a PDU Session Establishment after ${timeout}s" >&2
-    return 1
-}
-
-zmq_wait_ue_connections() {
-    # Get all UE pod names into an array
-    UE_PODS=($(kubectl -n ran get pods -l app.kubernetes.io/component=ue -o jsonpath='{.items[*].metadata.name}'))
-
-    # Loop through each UE pod
-    i=1
-    for podname in "${UE_PODS[@]}"; do
-        zmq_wait_ue_connection $i $podname
-        i=$((i + 1))  # increment counter
-    done
-}
-
-zmq_trigger_and_wait_ue_connections() {
-    echo -e "\nTriggering ZMQ UE containers"
-    sudo mkdir -p $zmq_host_path
-    sudo touch $zmq_host_path/$zmq_start_connections_file
-
-    zmq_wait_ue_connections
-}
-
-zmq_trigger_traffic() {
-    echo -e "\nTriggering ZMQ traffic containers"
-    sudo mkdir -p $zmq_host_path
-    sudo touch $zmq_host_path/$zmq_start_traffic_file
-}
 
 
 #######################################
@@ -429,7 +304,6 @@ zmq_trigger_traffic() {
 #######################################
 
 main() {
-    init_env
     parse_args "$@"
     echo CHART_VERSION $CHART_VERSION
     resolve_helm_source
@@ -449,11 +323,10 @@ main() {
     wait_gnb_amf_connected
     autoload_codeletSets
     if [ "$zmq_enabled" == "true" ]; then
-        zmq_trigger_and_wait_grc
-        zmq_trigger_and_wait_ue_connections
-        zmq_trigger_traffic
+        zmq_trigger_procedures
     fi
 }
 
 main "$@"
 
+exit 0
