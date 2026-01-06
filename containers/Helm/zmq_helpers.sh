@@ -46,7 +46,7 @@ zmq_clear_triggers() {
 
 #######################################
 zmq_wait_grc() {
-    echo -e "\nWaiting for GRC complete its in initialisation"
+    echo -e "\nWaiting for GRC complete its initialisation"
 
     local namespace="ran"
     local podname=$(kubectl -n "$namespace" get pods -l app=srs-grc-du1 -o jsonpath='{.items[*].metadata.name}')
