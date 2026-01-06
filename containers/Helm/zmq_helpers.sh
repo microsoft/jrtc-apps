@@ -20,7 +20,10 @@ zmq_clear_triggers() {
 
     zmq=$(jq '.zmq' <<<"$ALL_VALUES")
 
-    jq -e '.enabled == true' <<<"$zmq" >/dev/null || return
+    if ! jq -e '.enabled == true' <<<"$zmq" >/dev/null; then
+        # echo "⚠ ZMQ is disabled in Helm values, skipping triggers"
+        return
+    fi
 
     zmq_host_path=$(jq_required "$zmq" '.triggerFiles.hostPath')
     zmq_start_grc_file=$(jq_required "$zmq" '.triggerFiles.startGRC')

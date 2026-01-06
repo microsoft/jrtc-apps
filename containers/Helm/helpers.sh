@@ -11,7 +11,7 @@ jq_required() {
     local field="$2"
 
     local value
-    value=$(echo "$json" | jq -er "$field") || \
+    value=$(echo "$json" | jq -r "$field") || \
         fatal "Missing required field: $field"
 
     [[ -n "$value" && "$value" != "null" ]] || \
