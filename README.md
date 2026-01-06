@@ -27,6 +27,14 @@ This project provides a collection of sample applications for instrumenting **sr
 
 # 2. Significant Commits / Features
 
+[Jan 6, 2026,  commit 792a739](https://github.com/microsoft/jrtc-apps/commit/5f02871cc8a7bccbddc72c39891fa0bfbf97788c) - Auto-loading of codelets, ZMQ mode
+ 
+- Codelets can now be passed as command line arguments to __install.sh__, and are automatically loaded.
+- To facilitate this, the startup sequence has been extended, and the codelets are only loaded once the gNB has successfully connected to the AMF.
+
+- New support for running gNB in ZMQ mode, using GnuRadioCompanion and ZMQ mode srsUEs.
+  - gNB runs on ZMQ mode, and multiple ZMQ UEs register and automatically start iPerf.
+
 [Oct 17, 2025,  commit 792a739](https://github.com/microsoft/jrtc-apps/commit/792a739ec3a126948469cc4c87d248d716c7adf1) - Dynamic slice allocation
 
 - Multiple modifications were implemented to support dynamic reconfiguration of spectrum PRB allocations across slices. These changes include:-
