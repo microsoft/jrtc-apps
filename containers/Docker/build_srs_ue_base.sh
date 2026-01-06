@@ -39,8 +39,13 @@ done
 echo BASE_IMAGE_TAG $BASE_IMAGE_TAG
 echo SRSRAN_IMAGE_TAG $SRSRAN_IMAGE_TAG
 
+# docker build $CACHE_FLAG \
+#     --build-arg BASE_IMAGE_TAG=${BASE_IMAGE_TAG} \
+#     -t ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRSRAN_IMAGE_TAG} -f SRS-jbpf.Dockerfile .
+
 docker build $CACHE_FLAG \
     --build-arg BASE_IMAGE_TAG=${BASE_IMAGE_TAG} \
-    -t ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRSRAN_IMAGE_TAG} -f SRS-jbpf.Dockerfile .
+    -t ghcr.io/microsoft/jrtc-apps/srs-ue-base:${SRSRAN_IMAGE_TAG} -f SRS-ue-base.Dockerfile .
+
 
 exit 0

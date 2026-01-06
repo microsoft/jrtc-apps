@@ -9,10 +9,15 @@
     - [3.2.4. Start the srsRAN](#324-start-the-srsran)
       - [3.2.4.1. Deploy RAN without jrtc:](#3241-deploy-ran-without-jrtc)
       - [3.2.4.2. Deploy RAN with jrtc:](#3242-deploy-ran-with-jrtc)
+      - [3.2.4.3. Auto-load codelets](#3243-auto-load-codelets)
   - [3.3. Running the Examples](#33-running-the-examples)
 - [4. Hooks and Codelets](#4-hooks-and-codelets)
-- [5. Frequently Asked Questions](#5-frequently-asked-questions)
-- [6. License](#6-license)
+- [5. RAN ZMQ mode](#5-ran-zmq-mode)
+  - [5.1. UE Pods](#51-ue-pods)
+  - [5.2. ZMQ Configuration (values.yaml)](#52-zmq-configuration-valuesyaml)
+  - [5.3. Core updates](#53-core-updates)
+- [6. Frequently Asked Questions](#6-frequently-asked-questions)
+- [7. License](#7-license)
 
 
 # 1. Introduction
@@ -21,6 +26,14 @@ This project provides a collection of sample applications for instrumenting **sr
 [jbpf](https://github.com/microsoft/jbpf) and [jrt-controller](https://github.com/microsoft/jrt-controller) frameworks.
 
 # 2. Significant Commits / Features
+
+[Jan 6, 2026,  commit 792a739](https://github.com/microsoft/jrtc-apps/commit/5f02871cc8a7bccbddc72c39891fa0bfbf97788c) - Auto-loading of codelets, ZMQ mode
+ 
+- Codelets can now be passed as command line arguments to __install.sh__, and are automatically loaded.
+- To facilitate this, the startup sequence has been extended, and the codelets are only loaded once the gNB has successfully connected to the AMF.
+
+- New support for running gNB in ZMQ mode, using GnuRadioCompanion and ZMQ mode srsUEs.
+  - gNB runs on ZMQ mode, and multiple ZMQ UEs register and automatically start iPerf.
 
 [Oct 17, 2025,  commit 792a739](https://github.com/microsoft/jrtc-apps/commit/792a739ec3a126948469cc4c87d248d716c7adf1) - Dynamic slice allocation
 
@@ -106,6 +119,7 @@ The easiest way to configure parameters related to local setup is to supply them
 #### 3.2.4.1. Deploy RAN without jrtc:
 
   ```
+  cd ~/jrtc-apps/containers/Helm
   ./install.sh -h . -f config.yaml
   ```
 
@@ -135,6 +149,13 @@ The easiest way to configure parameters related to local setup is to supply them
   srs-gnb-du1-0   3/3     Running   0          11s
   ```
 
+#### 3.2.4.3. Auto-load codelets
+
+Codelets can be automatically loaded by providing "-c" arguments e.g.
+```
+  ./install.sh -h . -f config.yaml -f jrtc.yaml -c slice_mgmt/deployment.yaml -c dashboard/deployment.yaml
+```
+
 ---
 
 ## 3.3. Running the Examples
@@ -157,8 +178,82 @@ This project includes two examples:
 
 The available Jbpf hooks are described [here](./docs/srsran_hooks.md). Some of the codelets are documented [here](./docs/codelets.md).
 
+# 5. RAN ZMQ mode
 
-# 5. Frequently Asked Questions
+The RAN can also be run in __ZMQ mode__.
+
+When running in this mode, the following additional containers are used:
+- __GRC__ – GNURadio Companion
+- __UEs__ – up to a maximum of 2 UEs
+
+In ZMQ mode:
+- The __gNB__ communicates with the UEs via the __GRC__ container.
+- The __gNB runs exclusively in ZMQ mode__, therefore __no physical RU can be connected__.
+
+## 5.1. UE Pods
+  
+A separate __pod is created for each UE.__
+Each UE pod contains two containers:
+- ue
+  - Automatically registers the UE with the core network.
+  - Establishes a PDU session to the configured APN.
+- traffic
+  - Starts after the UE successfully registers.
+  - Automatically runs an __iperf3__ traffic test using the configured parameters.
+
+## 5.2. ZMQ Configuration (values.yaml)
+
+The following fields can be configured by the user in values.yaml to enable and customize ZMQ mode:
+
+```yaml
+zmq:
+  enabled: False   <========= set this to True to use ZMQ mode.
+  ues:
+    ue1:
+      tx_port: 2101
+      rx_port: 2100
+      imsi: "001010123456780"
+      imei: "353490069873310"
+      apn: "internet"
+      pathloss: 0
+      iperf3:
+        automatic: True
+        server: "192.168.100.13"
+        port: 5301
+        bw: "10M"
+        cmd_options: "-w8M -l1320"
+        duration: "10000"
+        udp: True
+        downlink: true
+    ue2:
+      tx_port: 2201
+      rx_port: 2200
+      imsi: "001010123456781"
+      imei: "353490069873311"
+      apn: "internet2"
+      pathloss: 0
+      iperf3:
+        automatic: True
+        server: "192.168.100.13"
+        port: 5302
+        bw: "10M"
+        cmd_options: "-w8M -l1320"
+        duration: "10000"
+        udp: True
+        downlink: true
+```
+
+## 5.3. Core updates
+
+In order to support the above UEs, the following IMSIs need to be configured in the Core network:-
+- 001010123456780
+- 001010123456781
+
+Refer to the following for more details https://docs.srsran.com/projects/project/en/latest/tutorials/source/srsUE/source/index.html#zeromq-based-setup
+
+For credentials, refer to the __"UE config"__ files which are provided.
+
+# 6. Frequently Asked Questions
 
 **Q:** Can codelets and apps be loaded from a different server or even a different folder? 
 
@@ -166,7 +261,7 @@ The available Jbpf hooks are described [here](./docs/srsran_hooks.md). Some of t
 
 
 
-# 6. License
+# 7. License
 
 This project is licensed under the [MIT License](LICENSE.md).
 

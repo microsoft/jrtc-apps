@@ -1,0 +1,379 @@
+{{- if  $.Values.zmq.enabled }}
+
+{{- range $ran_name, $values := .Values.duConfigs }}
+
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ $ran_name }}-zmq-trigger-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: {{ $.Values.zmq.triggerFiles.hostPath }}
+    type: DirectoryOrCreate
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $ran_name }}-zmq-trigger-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: srs-grc-{{ $ran_name }}
+  labels:
+    app: srs-grc-{{ $ran_name }}
+spec:
+  serviceName: srs-service-du-{{ $ran_name }}-grc
+  selector:
+    matchLabels:
+      app:  srs-grc-{{ $ran_name }}
+  template:
+    metadata:
+      labels:
+        app:  srs-grc-{{ $ran_name }}
+      # annotations:
+      #   k8s.v1.cni.cncf.io/networks: '[ { "name": "srs-sriov-ue" } ]'
+    spec:
+      serviceAccountName: srs-service-account
+      terminationGracePeriodSeconds: 0
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+
+      initContainers:
+
+      - name: grc-wait-for-zmq-grc-trigger
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            echo "Waiting for ZMQ grc trigger..."
+            until [ -f {{ $.Values.zmq.triggerFiles.mountPath }}/{{ $.Values.zmq.triggerFiles.startGRC }} ]; do
+              sleep {{ $.Values.zmq.triggerFiles.pollSeconds }}
+            done
+            echo "ZMQ GRC triggered complete."
+        volumeMounts:
+        - name: zmq-trigger
+          mountPath: {{ $.Values.zmq.triggerFiles.mountPath }}
+
+      containers:
+
+      - name: grc
+        image: "{{ $.Values.image.srs_grc }}"
+        imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
+
+        command: ["/bin/sh", "-c"]
+        {{- if  $.Values.debug_mode.enabled }}
+        args: [ "sleep 99999999d" ]
+        {{- else }}
+        args: [ "/app/GRC_run.sh" ]
+        {{- end }}
+
+        env:
+          - name: GNB_ADDR
+            value: "srs-gnb-{{ $ran_name }}-zmq.ran.svc.cluster.local"
+          - name: GNB_TX_PORT
+            value: "{{ $.Values.zmq.ran.tx_port}}"
+          - name: GNB_RX_PORT
+            value: "{{ $.Values.zmq.ran.rx_port}}"
+          - name: UE_ADDRS
+            value: "{{- range $ue_name, $ue := $.Values.zmq.ues -}}{{ if $ue_name }} {{ end }}srs-{{ $ue_name }}-{{ $ran_name }}-zmq.ran.svc.cluster.local{{- end }}"
+          - name: UE_TX_PORTS
+            value: "{{- range $ue_name, $ue := $.Values.zmq.ues -}}{{ if $ue_name }} {{ end }}{{ $ue.tx_port }}{{- end }}"
+          - name: UE_RX_PORTS
+            value: "{{- range $ue_name, $ue := $.Values.zmq.ues -}}{{ if $ue_name }} {{ end }}{{ $ue.rx_port }}{{- end }}"
+          - name: UE_PATHLOSS
+            value: "{{- range $ue_name, $ue := $.Values.zmq.ues -}}{{ if $ue_name }} {{ end }}{{ $ue.pathloss }}{{- end }}"
+
+        securityContext:
+          privileged: true
+          seccompProfile:
+            type: Unconfined          
+          capabilities:
+            add:
+              - NET_ADMIN
+              - NET_RAW
+              - SYS_TIME
+              - SYS_ADMIN
+              - IPC_LOCK
+              - SYS_NICE              
+        tty: true
+        stdin: true
+
+        resources:
+          requests:
+            cpu: {{ $.Values.resources.ue.requests.cpu | default "500m" }}
+            memory: {{ $.Values.resources.ue.requests.memory | default "512Mi" }}
+          limits:
+            cpu: {{ $.Values.resources.ue.limits.cpu | default "1" }}
+            memory: {{ $.Values.resources.ue.limits.memory | default "1Gi" }}
+
+      volumes:
+        - name: zmq-trigger
+          persistentVolumeClaim:
+            claimName: {{ $ran_name }}-zmq-trigger-pvc
+
+
+---
+# DNS: srs-grc-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-grc-{{ $ran_name }}-zmq
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: srs-grc-{{ $ran_name }}
+spec:
+  selector:
+    app: srs-grc-{{ $ran_name }}
+  type: ClusterIP
+  ports:
+    - name: grc-gnb-zmq-rx
+      protocol: TCP
+      port: {{ $.Values.zmq.ran.rx_port}}
+      targetPort: {{ $.Values.zmq.ran.rx_port}}
+    - name: grc-gnb-zmq-tx
+      protocol: TCP
+      port: {{ $.Values.zmq.ran.tx_port}}
+      targetPort: {{ $.Values.zmq.ran.tx_port}}
+{{- range $ue_name, $ue_values := $.Values.zmq.ues }}  
+    - name: grc-{{ $ue_name }}-zmq-tx
+      protocol: TCP
+      port: {{ $ue_values.tx_port }}
+      targetPort: {{ $ue_values.tx_port }}
+    - name: grc-{{ $ue_name }}-zmq-rx
+      protocol: TCP
+      port: {{ $ue_values.rx_port }}
+      targetPort: {{ $ue_values.rx_port }}
+{{- end }}
+
+
+{{- range $ue_name, $ue_values := $.Values.zmq.ues }}
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: srs-{{ $ue_name }}-{{ $ran_name }}
+  labels:
+    app: srs-{{ $ue_name }}-{{ $ran_name }}
+    app.kubernetes.io/component: ue 
+spec:
+  serviceName: srs-service-du-{{ $ran_name }}-{{ $ue_name }}
+  selector:
+    matchLabels:
+      app:  srs-{{ $ue_name }}-{{ $ran_name }}
+  template:
+    metadata:
+      labels:
+        app:  srs-{{ $ue_name }}-{{ $ran_name }}
+        app.kubernetes.io/component: ue
+
+      # annotations:
+      #   k8s.v1.cni.cncf.io/networks: '[ { "name": "srs-sriov-ue" } ]'
+    spec:
+      serviceAccountName: srs-service-account
+      terminationGracePeriodSeconds: 0
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+
+
+      initContainers:
+
+      - name: ue-wait-for-zmq-connections-trigger
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            echo "Waiting for ZMQ connections trigger..."
+            until [ -f {{ $.Values.zmq.triggerFiles.mountPath }}/{{ $.Values.zmq.triggerFiles.startConnections }} ]; do
+              sleep {{ $.Values.zmq.triggerFiles.pollSeconds }}
+            done
+            echo "ZMQ triggered complete."
+        volumeMounts:
+        - name: zmq-trigger
+          mountPath: {{ $.Values.zmq.triggerFiles.mountPath }}
+
+
+      containers:
+
+      - name: ue
+        image: "{{ $.Values.image.srs_ue }}"
+        imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
+
+        command: ["/bin/sh", "-c"]
+        {{- if  $.Values.debug_mode.enabled }}
+        args: [ "sleep 99999999d" ]
+        {{- else }}
+        args: [ "/usr/local/bin/run.sh" ]
+        {{- end }}
+
+        env:
+          - name: TX_PORT
+            value: "{{ $ue_values.tx_port }}"
+          - name: RX_ADDR
+            value: "srs-grc-{{ $ran_name }}-zmq.ran.svc.cluster.local"
+          - name: RX_PORT
+            value: "{{ $ue_values.rx_port }}"
+          - name: IMSI
+            value: "{{ $ue_values.imsi }}"
+          - name: IMEI
+            value: "{{ $ue_values.imei }}"
+          - name: APN
+            value: "{{ $ue_values.apn }}"
+
+        securityContext:
+          privileged: true
+          seccompProfile:
+            type: Unconfined          
+          capabilities:
+            add:
+              - NET_ADMIN
+              - NET_RAW
+              - SYS_TIME
+              - SYS_ADMIN
+              - IPC_LOCK
+              - SYS_NICE              
+        tty: true
+        stdin: true
+
+        resources:
+          requests:
+            cpu: {{ $.Values.resources.ue.requests.cpu | default "500m" }}
+            memory: {{ $.Values.resources.ue.requests.memory | default "512Mi" }}
+          limits:
+            cpu: {{ $.Values.resources.ue.limits.cpu | default "1" }}
+            memory: {{ $.Values.resources.ue.limits.memory | default "1Gi" }}
+
+      - name: traffic
+        image: "{{ $.Values.image.srs_ue }}"
+        imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
+
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+{{- if  $ue_values.iperf3.automatic }}
+            
+            set -e
+
+            echo "Waiting for ZMQ traffic trigger ({{ $.Values.zmq.triggerFiles.mountPath }}/{{ $.Values.zmq.triggerFiles.startTraffic }})..."
+            until [ -f {{ $.Values.zmq.triggerFiles.mountPath }}/{{ $.Values.zmq.triggerFiles.startTraffic }} ]; do
+              sleep {{ $.Values.zmq.triggerFiles.pollSeconds }}
+            done
+            echo "ZMQ traffic triggered complete."
+
+            # set routes and get IP
+            ./set_ue_ip_routes.sh 
+            TUN_IF="tun_srsue"
+            # Extract IP and subnet
+            UE_CIDR=$(ip -o -4 addr show dev "$TUN_IF" | awk '{print $4}')
+            echo UE_CIDR $UE_CIDR
+            if [ -z "$UE_CIDR" ]; then
+              echo "Error: $TUN_IF has no IPv4 address"
+              exit 1
+            fi
+            UE_IP=${UE_CIDR%/*}
+            echo UE_IP $UE_IP
+
+            # run iperf
+            IPERF_SERVER="{{ $ue_values.iperf3.server }}"
+            IPERF_PORT="{{ $ue_values.iperf3.port }}"
+            IPERF_BW="{{ $ue_values.iperf3.bw }}"
+            IPERF_TIME="{{ $ue_values.iperf3.duration }}"
+            IPERF_OPTS="{{ $ue_values.iperf3.cmd_options }}"
+            CMD="iperf3 -c $IPERF_SERVER -t $IPERF_TIME -p $IPERF_PORT -B $UE_IP $IPERF_OPTS -b $IPERF_BW"
+            # Add UDP options if enabled
+            if {{ $ue_values.iperf3.udp }}; then
+              CMD="$CMD -u"
+            fi
+            # Add downlink if enabled
+            if {{ $ue_values.iperf3.downlink }}; then
+              CMD="$CMD -R"
+            fi
+            echo "Will now run : $CMD"
+            $CMD
+{{- end }}
+            sleep 99999999
+
+        volumeMounts:
+        - name: zmq-trigger
+          mountPath: {{ $.Values.zmq.triggerFiles.mountPath }}
+
+        securityContext:
+          privileged: true
+          seccompProfile:
+            type: Unconfined          
+          capabilities:
+            add:
+              - NET_ADMIN
+              - NET_RAW
+              - SYS_TIME
+              - SYS_ADMIN
+              - IPC_LOCK
+              - SYS_NICE              
+        tty: true
+        stdin: true
+
+        resources:
+          requests:
+            cpu: {{ $.Values.resources.ue.requests.cpu | default "500m" }}
+            memory: {{ $.Values.resources.ue.requests.memory | default "512Mi" }}
+          limits:
+            cpu: {{ $.Values.resources.ue.limits.cpu | default "1" }}
+            memory: {{ $.Values.resources.ue.limits.memory | default "1Gi" }}
+
+      volumes:
+        - name: zmq-trigger
+          persistentVolumeClaim:
+            claimName: {{ $ran_name }}-zmq-trigger-pvc
+
+---
+
+# DNS:  srs-{{ $ue_name }}-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-{{ $ue_name }}-{{ $ran_name }}-zmq
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app:  srs-{{ $ue_name }}-{{ $ran_name }}
+spec:
+  selector:
+    app:  srs-{{ $ue_name }}-{{ $ran_name }}
+  type: ClusterIP
+  ports:
+    - name: {{ $ue_name }}-zmq-tx
+      protocol: TCP
+      port: {{ $ue_values.tx_port }}
+      targetPort: {{ $ue_values.tx_port }}
+    - name: {{ $ue_name }}-zmq-rx
+      protocol: TCP
+      port: {{ $ue_values.rx_port }}
+      targetPort: {{ $ue_values.rx_port }}
+
+---
+{{- end }}
+
+{{- end }}
+
+{{- end }}

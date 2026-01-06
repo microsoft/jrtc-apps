@@ -3,12 +3,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-BASE_IMAGE_TAG=latest
+IMAGE_TAG=latest
 
 Usage()
 {
    # Display Help
-   echo "Build srsRan base image"
+   echo "Build GNU Radio Companion image"
    echo "options:"
    echo "[-b]    Optional base image tag.  Default='latest'"
    echo
@@ -18,7 +18,7 @@ Usage()
 while getopts "b:" option; do
 	case $option in
 		b) # Set image tag
-			BASE_IMAGE_TAG="$OPTARG";;
+			IMAGE_TAG="$OPTARG";;
 		\?) # Invalid option
 			echo "Error: Invalid option"
 			Usage
@@ -26,8 +26,8 @@ while getopts "b:" option; do
 	esac
 done
 
-echo BASE_IMAGE_TAG $BASE_IMAGE_TAG
+echo IMAGE_TAG $IMAGE_TAG
 
-docker build -t ghcr.io/microsoft/jrtc-apps/base/srs:$BASE_IMAGE_TAG -f base.Dockerfile .
+docker build -t ghcr.io/microsoft/jrtc-apps/grc:$IMAGE_TAG -f GRC.Dockerfile .
 
 exit 0

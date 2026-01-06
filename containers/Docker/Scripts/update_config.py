@@ -89,6 +89,59 @@ def get_sriov_device_pci(sriov_resource_name):
         return None
 
 
+def update_generic(input_data, config_data, k):
+    # If defined, pass-thru unmodified srsRAN config params
+    # (and in process delete any original config)
+    if input_data.get(k):
+        if not config_data.get(k):
+            config_data[k] = copy.deepcopy(input_data.get(k))
+        else:
+            deep_merge(config_data[k], input_data.get(k), overwrite=True)
+
+
+def update_cucp(input_data, config_data):
+    if input_data.get('cu_cp'):
+        if not config_data.get('cu_cp'):
+            config_data['cu_cp'] = copy.deepcopy(input_data.get('cu_cp'))
+        else:
+            deep_merge(config_data['cu_cp'], input_data.get('cu_cp'), overwrite=True)
+    # Extract the core IP
+    # This must come after the previous 'cu_cp' config as the coreIP is specified in a second 'values' file
+    core_ip = input_data['ngcParams']['coreIP']
+    ensure_path_exists(config_data, 'cu_cp.amf')
+    config_data['cu_cp']['amf']['addr'] = core_ip
+
+
+def update_cuup(input_data, config_data):
+    # Extract local CUUP IP address to announce to the AMF
+    sriov = input_data['sriov']
+    cuup_ip = sriov['cuup_ip']
+    ensure_path_exists(config_data, 'cu_up.ngu.socket')
+    cuup_sock = {
+        "bind_addr": cuup_ip
+    }
+    config_data['cu_up']['ngu']['socket'] = []
+    config_data['cu_up']['ngu']['socket'].append(cuup_sock)
+
+
+def update_jbpf(input_data, config_data):
+    if input_data.get('jbpf'):
+        if input_data.get('jbpf').get('enabled', True):
+            if input_data.get('jbpf').get('cfg'):
+                if not config_data.get('jbpf'):
+                    config_data['jbpf'] = copy.deepcopy(input_data.get('jbpf').get('cfg'))
+                else:
+                    deep_merge(config_data['jbpf'], input_data.get('jbpf').get('cfg'), overwrite=True)
+
+
+def write_taskset_script(input_data, config_data, script):
+    if input_data.get('system', {}).get('taskset_cpu_args'):
+        # Write to a shell script
+        with open(script, "w") as script_file:
+            script_file.write(f"export TASKSET_CPU_ARGS='{input_data['system']['taskset_cpu_args']}'\n")
+
+
+
 
 # NOTE: For now we support only one DU and multiple RUs
 # CU-DU split is not properly tested.
@@ -146,8 +199,6 @@ def update_config(input_files, config_file, output_file, split, du_name):
             else:
                 deep_merge(config_data['cell_cfg'], input_data.get('cell_cfg'), overwrite=True)
 
-
-
         # ru_ofh/cells
         for ind, ru in enumerate(du_config['cells'].values()):
             if ind >= len(config_data['ru_ofh']['cells']):
@@ -201,28 +252,9 @@ def update_config(input_files, config_file, output_file, split, du_name):
     else:
         logging.info(f"Configuring CU {du_name}")
 
+    update_cucp(input_data, config_data)
 
-
-    if input_data.get('cu_cp'):
-        if not config_data.get('cu_cp'):
-            config_data['cu_cp'] = copy.deepcopy(input_data.get('cu_cp'))
-        else:
-            deep_merge(config_data['cu_cp'], input_data.get('cu_cp'), overwrite=True)
-    # Extract the core IP
-    # This must come after the previous 'cu_cp' config as the coreIP is specified in a second 'values' file
-    core_ip = input_data['ngcParams']['coreIP']
-    ensure_path_exists(config_data, 'cu_cp.amf')
-    config_data['cu_cp']['amf']['addr'] = core_ip
-
-    # Extract local CUUP IP address to announce to the AMF
-    sriov = input_data['sriov']
-    cuup_ip = sriov['cuup_ip']
-    ensure_path_exists(config_data, 'cu_up.ngu.socket')
-    cuup_sock = {
-        "bind_addr": cuup_ip
-    }
-    config_data['cu_up']['ngu']['socket'] = []
-    config_data['cu_up']['ngu']['socket'].append(cuup_sock)
+    update_cuup(input_data, config_data)
 
     # NOTE: not tested
     if split:
@@ -243,38 +275,16 @@ def update_config(input_files, config_file, output_file, split, du_name):
 
     # If defined, pass-thru unmodified srsRAN config params
     # (and in process delete any original config)
-    if input_data.get('metrics'):
-        if not config_data.get('metrics'):
-            config_data['metrics'] = copy.deepcopy(input_data.get('metrics'))
-        else:
-            deep_merge(config_data['metrics'], input_data.get('metrics'), overwrite=True)
-    if input_data.get('pcap'):
-        if not config_data.get('pcap'):
-            config_data['pcap'] = copy.deepcopy(input_data.get('pcap'))
-        else:
-            deep_merge(config_data['pcap'], input_data.get('pcap'), overwrite=True)
-    if input_data.get('log'):
-        if not config_data.get('log'):
-            config_data['log'] = copy.deepcopy(input_data.get('log'))
-        else:
-            deep_merge(config_data['log'], input_data.get('log'), overwrite=True)
-
+    update_generic(input_data, config_data, 'metrics')
+    update_generic(input_data, config_data, 'pcap')
+    update_generic(input_data, config_data, 'log')
 
     if input_data.get('system', {}).get('eal_cpu_args'):
         config_data['hal']['eal_args'] = input_data['system']['eal_cpu_args'] + " " + config_data['hal']['eal_args']
 
-    if input_data.get('system', {}).get('taskset_cpu_args'):
-        # Write to a shell script
-        with open("def_taskset.sh", "w") as script_file:
-            script_file.write(f"export TASKSET_CPU_ARGS='{input_data['system']['taskset_cpu_args']}'\n")
+    update_jbpf(input_data, config_data)
 
-    if input_data.get('jbpf'):
-        if input_data.get('jbpf').get('enabled', True):
-            if input_data.get('jbpf').get('cfg'):
-                if not config_data.get('jbpf'):
-                    config_data['jbpf'] = copy.deepcopy(input_data.get('jbpf').get('cfg'))
-                else:
-                    deep_merge(config_data['jbpf'], input_data.get('jbpf').get('cfg'), overwrite=True)
+    write_taskset_script(input_data, config_data, "def_taskset.sh")
 
     # Write the updated config to the output file
     with open(output_file, 'w') as outfile:

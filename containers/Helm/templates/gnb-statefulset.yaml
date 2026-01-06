@@ -72,7 +72,6 @@ spec:
         configMap:
           name: srs-gnb-cm-{{ $ran_name }}
 
-
       {{- if (or (or $.Values.vlan_isolation.enabled (eq (int $.Values.jbpf.cfg.jbpf_enable_ipc) 1))  (and (not $.Values.debug_mode.enabled) $.Values.das.enabled) ) }}
       initContainers:
       
@@ -113,6 +112,8 @@ spec:
           done;"
       {{- end }}
 
+      {{- if not $.Values.zmq.enabled }}
+
       {{- if $.Values.vlan_isolation.enabled }}
       {{range $idx_c, $cell := $values.cells}}
       # Init container to set VLANs for RUs using a custom API
@@ -130,8 +131,11 @@ spec:
           echo 'Waiting for VLANs to be set...' &&
           curl -s --show-error -f -X PUT "http://{{ $.Values.vlan_isolation.url }}/tor_switch/assign_servers_to_ru?servers=$(MY_NODE_NAME)&ru={{ $cell.ruNAME }}" &&
           echo 'All VLANs set, continuing'
-      {{end}}
-      {{- end }}
+      {{end}}  # range
+      
+      {{- end }} # vlan_isolation.enabled
+      
+      {{- end }}  # zmq.enabled
 
       {{- end }}
 
@@ -163,7 +167,12 @@ spec:
       {{- end }}
 
       - name: gnb
+        {{- if  $.Values.zmq.enabled }}
+        image: "{{ $.Values.image.srs_jbpf_zmq }}"
+        {{- else }}
         image: "{{ $.Values.image.srs_jbpf }}"
+        {{- end }}
+
         imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
         volumeMounts:
         - name: dshm
@@ -183,8 +192,8 @@ spec:
           readOnly: true
 
         command: ["/bin/sh", "-c"]
-        {{- if  $.Values.debug_mode.enabled }}
-        args: [ "sleep 99999999d" ]
+        {{- if  $.Values.zmq.enabled }}            
+        args: [ "/opt/Scripts/run_zmq.sh" ]
         {{- else }}
         args: [ "/opt/Scripts/run.sh" ]
         {{- end }}
@@ -193,6 +202,14 @@ spec:
             value: "{{ $.Values.debug_mode.enabled }}"
           - name: JBPF_CODELETS
             value: "/codelets"
+        {{- if  $.Values.zmq.enabled }}            
+          - name: ZMQ_TX_PORT
+            value: "{{ $.Values.zmq.ran.tx_port }}"
+          - name: ZMQ_RX_ADDR
+            value: "srs-grc-{{ $ran_name }}-zmq.ran.svc.cluster.local"
+          - name: ZMQ_RX_PORT
+            value: "{{ $.Values.zmq.ran.rx_port }}"
+        {{- end }}
         securityContext:
           privileged: true
           capabilities:
@@ -202,8 +219,7 @@ spec:
             - SYS_NICE
         tty: true
         stdin: true
-
-
+  
         resources:
           limits:
             cpu: {{ $.Values.resources.gnb.limits.cpu }}
@@ -321,6 +337,36 @@ spec:
       targetPort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
       nodePort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
 
+---
+
+{{- if  $.Values.zmq.enabled }}
+
+# ZMQ service for gNB – used by UE to connect (tx/rx)
+# DNS: srs-gnb-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-{{ $ran_name }}-zmq
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: srs-gnb-{{ $ran_name }}
+spec:
+  selector:
+    app: srs-gnb-{{ $ran_name }}
+  type: ClusterIP
+  ports:
+    - name: gnb-zmq-rx
+      protocol: TCP
+      port: {{ add $.Values.zmq.ran.rx_port $ran_cnt }}
+      targetPort: {{ add $.Values.zmq.ran.rx_port $ran_cnt }}
+    - name: gnb-zmq-tx
+      protocol: TCP
+      port: {{ add $.Values.zmq.ran.tx_port $ran_cnt }}
+      targetPort: {{ add $.Values.zmq.ran.tx_port $ran_cnt }}
+
+---
+
+{{- end }}
 
 {{ $ran_cnt = add1 $ran_cnt }}
 

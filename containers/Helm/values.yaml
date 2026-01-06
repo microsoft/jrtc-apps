@@ -3,8 +3,11 @@
 # Declare variables to be passed into your templates.
 
 image:
-  srs_jbpf: ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.04-latest
-  srs_jbpf_proxy: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.04-latest
+  srs_jbpf: ghcr.io/microsoft/jrtc-apps/srs-jbpf:srsran25.10-latest
+  srs_jbpf_zmq: ghcr.io/microsoft/jrtc-apps/srs-jbpf-zmq:srsran25.10-latest
+  srs_jbpf_proxy: ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:srsran25.10-latest
+  srs_ue: ghcr.io/microsoft/jrtc-apps/srs-ue:srsran25.10-latest
+  srs_grc: ghcr.io/microsoft/jrtc-apps/grc:latest
   pullPolicy: Always
 
 HOSTNAME: ""
@@ -53,6 +56,24 @@ resources:
       cpu: 1
       memory: 2Gi
       hugepages2Gi: 4Gi
+  ue:
+    limits:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
+  grc:
+    limits:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+      hugepages1Gi: 1Gi
 
 
 duConfigs:
@@ -239,6 +260,62 @@ dmimo:
           ruDPDKResource: "intel.com/intel_sriov_dpdk_ru9"
           bitmask: 204
 
+zmq:
+  enabled: False
+  triggerFiles:
+    hostPath: /var/tmp/zmq-triggers
+    mountPath: /zmq-triggers
+    startGRC: zmq-trigger-grc
+    startConnections: zmq-trigger-connections
+    startTraffic: zmq-trigger-traffic
+    pollSeconds: 2
+  cell:
+    cellID: 1000
+    physicalCellID: 100
+    ruBandwidth: 10
+  # zmq map
+  #                gNB    ue1     ue2     ue3
+  # TX             2000   2101    2201    2301
+  # Rx             2001   2100    2200    2300
+  #
+  # Only 2 UEs currently configured.  Add more if CPU can support
+  #
+  ran:
+    tx_port: 2000
+    rx_port: 2001
+  ues:
+    ue1:
+      tx_port: 2101
+      rx_port: 2100
+      imsi: "001010123456780"
+      imei: "353490069873310"
+      apn: "internet"
+      pathloss: 0
+      iperf3:
+        automatic: True
+        server: "192.168.100.13"
+        port: 5301
+        bw: "10M"
+        cmd_options: "-w8M -l1320"
+        duration: "10000"
+        udp: True
+        downlink: true
+    ue2:
+      tx_port: 2201
+      rx_port: 2200
+      imsi: "001010123456781"
+      imei: "353490069873311"
+      apn: "internet2"
+      pathloss: 0
+      iperf3:
+        automatic: True
+        server: "192.168.100.13"
+        port: 5302
+        bw: "10M"
+        cmd_options: "-w8M -l1320"
+        duration: "10000"
+        udp: True
+        downlink: true
 
 
 # If enabled, the chart doesn't start executables in the containers, 
@@ -259,6 +336,7 @@ log:
   ofh_level: warning
   radio_level: warning
   hal_level: warning
+  cu_level: info
 
 # Also metrics, pcap
 
