@@ -31,7 +31,7 @@ while getopts "s:y:" option; do
 		\?) # Invalid option
 			echo "Error: Invalid option"
 			Help
-			exit;;
+			exit 1;;
 	esac
 done
 
