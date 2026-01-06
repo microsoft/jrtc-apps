@@ -38,7 +38,7 @@ FROM ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRS_JBPF_IMAGE_TAG}
 COPY --from=builder /usr/local /usr/local
 
 # Install build dependencies
-RUN tdnf install -y gettext && \
+RUN tdnf install -y gettext iproute && \
     tdnf clean all
 
 # Update dynamic linker cache

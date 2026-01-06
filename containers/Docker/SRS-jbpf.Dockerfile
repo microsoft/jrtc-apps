@@ -19,7 +19,7 @@ ADD srsRAN_Project /src
 ENV PKG_CONFIG_PATH=/opt/dpdk-23.11/build/meson-private:/usr/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:$PKG_CONFIG_PATH
 
 # extra modules required when ENABLE_JBPF=ON
-RUN tdnf -y install yaml-cpp-static boost-devel clang doxygen
+RUN tdnf -y install yaml-cpp-static boost-devel clang doxygen iproute
 
 WORKDIR /src
 RUN mkdir build
