@@ -59,6 +59,7 @@ spec:
 
       initContainers:
 
+      {{- if not  $.Values.debug_mode.enabled }}
       - name: grc-wait-for-zmq-grc-trigger
         image: busybox:1.36
         command:
@@ -73,6 +74,7 @@ spec:
         volumeMounts:
         - name: zmq-trigger
           mountPath: {{ $.Values.zmq.triggerFiles.mountPath }}
+      {{- end }}
 
       containers:
 
@@ -199,6 +201,7 @@ spec:
 
       initContainers:
 
+      {{- if not $.Values.debug_mode.enabled }}
       - name: ue-wait-for-zmq-connections-trigger
         image: busybox:1.36
         command:
@@ -213,6 +216,7 @@ spec:
         volumeMounts:
         - name: zmq-trigger
           mountPath: {{ $.Values.zmq.triggerFiles.mountPath }}
+        {{- end }}
 
 
       containers:
@@ -272,8 +276,8 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-{{- if  $ue_values.iperf3.automatic }}
-            
+
+{{- if (and (not $.Values.debug_mode.enabled) ($ue_values.iperf3.automatic)) }}
             set -e
 
             echo "Waiting for ZMQ traffic trigger ({{ $.Values.zmq.triggerFiles.mountPath }}/{{ $.Values.zmq.triggerFiles.startTraffic }})..."

@@ -196,6 +196,9 @@ print_summary() {
     echo "Custom image tags (if any):"
     print_image_tag "srs" "$CUSTOM_VALUES"
 
+    debug_mode_enabled=$(jq_required "$ALL_VALUES" '.debug_mode.enabled')
+    echo -e "\nDEBUG Mode: $debug_mode_enabled"
+
     jrtc_enabled=$(jq_required "$ALL_VALUES" '.jbpf.cfg.jbpf_enable_ipc')
     echo -e "\nJRTC enabled: $jrtc_enabled"    
 
@@ -318,13 +321,12 @@ main() {
     get_values
     print_summary
     zmq_clear_triggers
+    [ "$debug_mode_enabled" == "true" ] && return
     wait_jrtc_ready
     wait_gnb_ready
     wait_gnb_amf_connected
     autoload_codeletSets
-    if [ "$zmq_enabled" == "true" ]; then
-        zmq_trigger_procedures
-    fi
+    [ "$zmq_enabled" == "true" ] && zmq_trigger_procedures
 }
 
 main "$@"
