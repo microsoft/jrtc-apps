@@ -1,0 +1,1078 @@
+diff --git a/lib/pfcp/context.c b/lib/pfcp/context.c
+index 2ebb1fd5b..a456bae3d 100644
+--- a/lib/pfcp/context.c
++++ b/lib/pfcp/context.c
+@@ -2286,6 +2286,10 @@ ogs_pfcp_ue_ip_t *ogs_pfcp_ue_ip_alloc(
+         return NULL;
+     }
+ 
++    ogs_warn("ogs_pfcp_ue_ip_alloc: cause_value[%d] family[%d] dnn[%s] \n", 
++        *cause_value, family,
++        (dnn) ? dnn : "NULL");
++
+     if (dnn)
+         subnet = ogs_pfcp_find_subnet_by_dnn(family, dnn);
+     else
+@@ -2500,18 +2504,39 @@ ogs_pfcp_subnet_t *ogs_pfcp_find_subnet(int family)
+ ogs_pfcp_subnet_t *ogs_pfcp_find_subnet_by_dnn(int family, const char *dnn)
+ {
+     ogs_pfcp_subnet_t *subnet = NULL;
++    int j=0;
+ 
+     ogs_assert(dnn);
+     ogs_assert(family == AF_INET || family == AF_INET6);
+ 
++    char buffer[8192]; // Large enough buffer for the string
++    int offset = 0;
++
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "ogs_pfcp_find_subnet_by_dnn self.subnet_list \n");
++    ogs_list_for_each(&self.subnet_list, subnet) {
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "-- dnn=%s family=%d prefixlen=%d pool.avail=%d, num_of_range=%d \n", subnet->dnn, subnet->family, subnet->prefixlen, subnet->pool.avail, subnet->num_of_range);
++    }
++    ogs_warn("%s\n", buffer);
++
++    ogs_warn("searching for family %d dnn %s\n", family, dnn);
++
++    offset = 0;
+     ogs_list_for_each(&self.subnet_list, subnet) {
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  -------\n");
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  subnet, dnn=%s family=%d prefixlen=%d pool.avail=%d, num_of_range=%d", subnet->dnn, subnet->family, subnet->prefixlen, subnet->pool.avail, subnet->num_of_range);
++        for (j=0; j<subnet->num_of_range; j++) {
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "     low %s high %s\n", subnet->range[j].low, subnet->range[j].high);
++        }
+         if ((subnet->family == AF_UNSPEC || subnet->family == family) &&
+             (strlen(subnet->dnn) == 0 ||
+                 (strlen(subnet->dnn) && ogs_strcasecmp(subnet->dnn, dnn) == 0)) &&
+-            subnet->pool.avail)
++            subnet->pool.avail) 
++        {
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "        selected !!\n");
+             break;
++        }
+     }
+-
++    ogs_warn("%s\nsubnet=%p\n", buffer, subnet);
+     return subnet;
+ }
+ 
+diff --git a/lib/proto/types.c b/lib/proto/types.c
+index 62f48136f..6d9d6e156 100644
+--- a/lib/proto/types.c
++++ b/lib/proto/types.c
+@@ -1168,3 +1168,55 @@ int ogs_pcc_rule_update_qos_from_media(
+ 
+     return OGS_OK;
+ }
++
++
++char* ogs_plmn_id_to_string2(ogs_plmn_id_t* plmn_id) {
++    static char buffer[7];
++    snprintf(buffer, sizeof(buffer), "%X%X%X%X%X%X",
++             plmn_id->mcc1, plmn_id->mcc2, plmn_id->mcc3,
++             plmn_id->mnc1, plmn_id->mnc2, plmn_id->mnc3);
++    return buffer;
++}
++
++char* ogs_s_nssai_to_string(ogs_s_nssai_t* s_nssai) {
++    static char buffer[32];
++    char *sd = ogs_s_nssai_sd_to_string(s_nssai->sd);
++    if (s_nssai->sd.v == OGS_S_NSSAI_NO_SD_VALUE) {
++        snprintf(buffer, sizeof(buffer), "sst: %d, sd: NO_SD", s_nssai->sst);
++    } else {
++        snprintf(buffer, sizeof(buffer), "sst: %d, sd: %s", s_nssai->sst, sd);
++    }
++    return buffer;
++}
++
++void ogs_slice_data_to_string(ogs_slice_data_t *slice_data, const char* indent, char* buffer, int* offset, int buffer_len)
++{
++    int i;
++
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%sslice_data:\n", indent);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  sst=%d sd=%d\n", indent, slice_data->s_nssai.sst, slice_data->s_nssai.sd.v);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  default_indicator=%d\n", indent, slice_data->default_indicator);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  context_identifier=%d\n", indent, slice_data->context_identifier);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  all_apn_config_inc=%d\n", indent, slice_data->all_apn_config_inc);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  num_of_session=%d\n", indent, slice_data->num_of_session);
++
++    char indent2[100];
++    sprintf(indent2, "%s  ", indent);
++    for (i=0; i<slice_data->num_of_session; i++) {
++        ogs_session_to_string(&slice_data->session[i], indent2, buffer, offset, buffer_len);
++    }
++}
++
++void ogs_session_to_string(ogs_session_t *session, const char* indent, char* buffer, int* offset, int buffer_len)
++{
++    int i;
++
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%ssession: %s\n", indent, session->name);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  context_identifier=%d\n", indent, session->context_identifier);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  default_dnn_indicator=%d\n", indent, session->default_dnn_indicator);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  session_type=%d\n", indent, session->session_type);
++    *offset += snprintf(buffer + *offset, buffer_len - *offset, "%s  ssc_mode=%d\n", indent, session->ssc_mode);
++    
++    // TODO - fill in rest if needed
++}
++
+diff --git a/lib/proto/types.h b/lib/proto/types.h
+index fb28a4b82..1438f0284 100644
+--- a/lib/proto/types.h
++++ b/lib/proto/types.h
+@@ -1081,6 +1081,12 @@ typedef struct ogs_port_s {
+     uint16_t port;
+ } ogs_port_t;
+ 
++
++char* ogs_plmn_id_to_string2(ogs_plmn_id_t* plmn_id);
++char* ogs_s_nssai_to_string(ogs_s_nssai_t* s_nssai);
++void ogs_slice_data_to_string(ogs_slice_data_t *slice_data, const char* indent, char* buffer, int* offset, int buffer_len);
++void ogs_session_to_string(ogs_session_t *session, const char* indent, char* buffer, int* offset, int buffer_len);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/meson.build b/meson.build
+index 5e2663afa..f47c234bd 100644
+--- a/meson.build
++++ b/meson.build
+@@ -98,6 +98,9 @@ if cc.get_id() == 'gcc' or cc.get_id() == 'clang'
+         '-fstack-protector',
+         '-fstack-protector-strong',
+         '--param=ssp-buffer-size=4',
++
++        #  '-DAMF_FORCE_IDENTITY_PROCEDURE',
++        '-DAMF_IGNORE_NAS_REGISTRATION_NSSAI',        
+     ]
+ 
+     if cc.get_id() == 'clang'
+diff --git a/misc/ipv6-netconf.sh b/misc/ipv6-netconf.sh
+index 3b1dc9003..243993072 100755
+--- a/misc/ipv6-netconf.sh
++++ b/misc/ipv6-netconf.sh
+@@ -18,6 +18,14 @@ if [ "$SYSTEM" = "Linux" ]; then
+     ip addr add 10.47.0.1/16 dev ogstun3
+     ip addr del 2001:db8:face::1/48 dev ogstun3 2> /dev/null
+     ip addr add 2001:db8:face::1/48 dev ogstun3
++    ip addr del 10.48.0.1/16 dev ogstun5 2> /dev/null
++    ip addr add 10.48.0.1/16 dev ogstun5
++    ip addr del 2001:db8:fafe::1/48 dev ogstun5 2> /dev/null
++    ip addr add 2001:db8:fafe::1/48 dev ogstun5
++    ip addr del 10.49.0.1/16 dev ogstun4 2> /dev/null
++    ip addr add 10.49.0.1/16 dev ogstun4
++    ip addr del 2001:db8:deaf::1/48 dev ogstun4 2> /dev/null
++    ip addr add 2001:db8:deaf::1/48 dev ogstun4
+     ip link set ogstun up
+     ip addr del fd69:f21d:873c:fa::1 dev lo 2> /dev/null
+     ip addr del fd69:f21d:873c:fa::2 dev lo 2> /dev/null
+diff --git a/misc/netconf.sh b/misc/netconf.sh
+index 7a0999eab..602d5cc97 100755
+--- a/misc/netconf.sh
++++ b/misc/netconf.sh
+@@ -14,14 +14,27 @@ if [ "$SYSTEM" = "Linux" ]; then
+     ip addr add 10.45.0.1/16 dev ogstun
+     ip addr del 2001:db8:cafe::1/48 dev ogstun 2> /dev/null
+     ip addr add 2001:db8:cafe::1/48 dev ogstun
++
+     ip addr del 10.46.0.1/16 dev ogstun2 2> /dev/null
+     ip addr add 10.46.0.1/16 dev ogstun2
+     ip addr del 2001:db8:babe::1/48 dev ogstun2 2> /dev/null
+     ip addr add 2001:db8:babe::1/48 dev ogstun2
++
+     ip addr del 10.47.0.1/16 dev ogstun3 2> /dev/null
+     ip addr add 10.47.0.1/16 dev ogstun3
+     ip addr del 2001:db8:face::1/48 dev ogstun3 2> /dev/null
+     ip addr add 2001:db8:face::1/48 dev ogstun3
++
++    ip addr del 10.48.0.1/16 dev ogstun5 2> /dev/null
++    ip addr add 10.48.0.1/16 dev ogstun5
++    ip addr del 2001:db8:fafe::1/48 dev ogstun5 2> /dev/null
++    ip addr add 2001:db8:fafe::1/48 dev ogstun5
++
++    ip addr del 10.49.0.1/16 dev ogstun4 2> /dev/null
++    ip addr add 10.49.0.1/16 dev ogstun4
++    ip addr del 2001:db8:deaf::1/48 dev ogstun4 2> /dev/null
++    ip addr add 2001:db8:deaf::1/48 dev ogstun4
++
+     ip link set ogstun up
+ else
+     sysctl -w net.inet.ip.forwarding=1
+diff --git a/src/amf/context.c b/src/amf/context.c
+index 67a0ae685..76c792d4a 100644
+--- a/src/amf/context.c
++++ b/src/amf/context.c
+@@ -17,6 +17,13 @@
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  */
+ 
++#include <stdio.h>
++#include <time.h>
++#include <stdint.h>
++#include <unistd.h>       // for close()
++#include <arpa/inet.h>    // for sockaddr_in, inet_pton()
++
++
+ #include "ngap-path.h"
+ 
+ static amf_context_t self;
+@@ -42,6 +49,13 @@ static void stats_add_amf_session(void);
+ static void stats_remove_amf_session(void);
+ static bool amf_namf_comm_parse_guti(ogs_nas_5gs_guti_t *guti, char *ue_context_id);
+ 
++static int ran_ue_to_json(ran_ue_t* ran_ue, char *json_str, size_t json_str_len, int offset);
++static void ran_ue_log(ran_ue_t* ran_ue, const char* event);
++static int amf_ue_to_json(amf_ue_t* amf_ue, char *json_str, size_t json_str_len, int offset);
++static void amf_ue_log(amf_ue_t* amf_ue, const char* event);
++static void amf_rlog(const char* json_msg);
++static void amf_list_display(void);
++
+ void amf_context_init(void)
+ {
+     ogs_assert(context_initialized == 0);
+@@ -228,6 +242,21 @@ int amf_context_parse_config(void)
+                 if (!strcmp(amf_key, "relative_capacity")) {
+                     const char *v = ogs_yaml_iter_value(&amf_iter);
+                     if (v) self.relative_capacity = atoi(v);
++
++                } else if (!strcmp(amf_key, "rlogger")) {
++                    ogs_yaml_iter_t logger_iter;
++                    ogs_yaml_iter_recurse(&amf_iter, &logger_iter);
++                    while (ogs_yaml_iter_next(&logger_iter)) {
++                        const char *key = ogs_yaml_iter_key(&logger_iter);
++                        ogs_assert(key);
++                        if (!strcmp(key, "enabled")) {
++                            self.rlogger.enabled = (ogs_yaml_iter_bool(&logger_iter) == 1);
++                        } else if (!strcmp(key, "rlog_port")) {
++                            const char* v =  ogs_yaml_iter_value(&logger_iter);
++                            self.rlogger.rlog_port = atoi(v);
++                        }
++                    }
++
+                 } else if (!strcmp(amf_key, "ngap")) {
+                     ogs_yaml_iter_t ngap_iter;
+                     ogs_yaml_iter_recurse(&amf_iter, &ngap_iter);
+@@ -1407,6 +1436,9 @@ ran_ue_t *ran_ue_add(amf_gnb_t *gnb, uint64_t ran_ue_ngap_id)
+ 
+     stats_add_ran_ue();
+ 
++
++    ran_ue_log(ran_ue, "ran-ue-add");
++
+     return ran_ue;
+ }
+ 
+@@ -1416,6 +1448,10 @@ void ran_ue_remove(ran_ue_t *ran_ue)
+ 
+     ogs_assert(ran_ue);
+ 
++    amf_ue_t* amf_ue = amf_ue_find_by_id(ran_ue->amf_ue_id);
++
++    ran_ue_log(ran_ue, "ran-ue-remove");
++
+     gnb = amf_gnb_find_by_id(ran_ue->gnb_id);
+ 
+     if (gnb) ogs_list_remove(&gnb->ran_ue_list, ran_ue);
+@@ -1426,6 +1462,10 @@ void ran_ue_remove(ran_ue_t *ran_ue)
+     ogs_pool_id_free(&ran_ue_pool, ran_ue);
+ 
+     stats_remove_ran_ue();
++
++    if (amf_ue) {
++        amf_ue_log(amf_ue, "ran-ue-remove");
++    }
+ }
+ 
+ void ran_ue_switch_to_gnb(ran_ue_t *ran_ue, amf_gnb_t *new_gnb)
+@@ -1516,6 +1556,8 @@ void amf_ue_new_guti(amf_ue_t *amf_ue)
+     amf_ue->next.m_tmsi = amf_m_tmsi_alloc();
+     ogs_assert(amf_ue->next.m_tmsi);
+     amf_ue->next.guti.m_tmsi = *(amf_ue->next.m_tmsi);
++
++    amf_ue_log(amf_ue, "amf-new-guti");
+ }
+ 
+ void amf_ue_confirm_guti(amf_ue_t *amf_ue)
+@@ -1563,6 +1605,8 @@ void amf_ue_confirm_guti(amf_ue_t *amf_ue)
+ 
+     /* Clear Next GUTI */
+     amf_ue->next.m_tmsi = NULL;
++
++    amf_ue_log(amf_ue, "amf-confirm-guti");
+ }
+ 
+ amf_ue_t *amf_ue_add(ran_ue_t *ran_ue)
+@@ -1682,6 +1726,8 @@ amf_ue_t *amf_ue_add(ran_ue_t *ran_ue)
+     ogs_info("[Added] Number of AMF-UEs is now %d",
+             ogs_list_count(&self.amf_ue_list));
+ 
++    amf_ue_log(amf_ue, "amf-ue-add");
++
+     return amf_ue;
+ }
+ 
+@@ -1691,6 +1737,8 @@ void amf_ue_remove(amf_ue_t *amf_ue)
+ 
+     ogs_assert(amf_ue);
+ 
++    amf_ue_log(amf_ue, "amf-ue-remove");    
++
+     ogs_list_remove(&self.amf_ue_list, amf_ue);
+ 
+     amf_ue_fsm_fini(amf_ue);
+@@ -2187,6 +2235,8 @@ void amf_ue_set_suci(amf_ue_t *amf_ue,
+     }
+     amf_ue->suci = suci;
+     ogs_hash_set(self.suci_hash, amf_ue->suci, strlen(amf_ue->suci), amf_ue);
++
++    amf_ue_log(amf_ue, "amf-set-suci");
+ }
+ 
+ void amf_ue_set_supi(amf_ue_t *amf_ue, char *supi)
+@@ -2200,6 +2250,8 @@ void amf_ue_set_supi(amf_ue_t *amf_ue, char *supi)
+     amf_ue->supi = ogs_strdup(supi);
+     ogs_assert(amf_ue->supi);
+     ogs_hash_set(self.supi_hash, amf_ue->supi, strlen(amf_ue->supi), amf_ue);
++
++    amf_ue_log(amf_ue, "amf-set-supi");
+ }
+ 
+ OpenAPI_rat_type_e amf_ue_rat_type(amf_ue_t *amf_ue)
+@@ -2229,6 +2281,8 @@ void amf_ue_associate_ran_ue(amf_ue_t *amf_ue, ran_ue_t *ran_ue)
+ 
+     amf_ue->ran_ue_id = ran_ue->id;
+     ran_ue->amf_ue_id = amf_ue->id;
++
++    amf_ue_log(amf_ue, "amf-associate-ran-ue");    
+ }
+ 
+ void ran_ue_deassociate(ran_ue_t *ran_ue)
+@@ -2575,20 +2629,35 @@ ogs_s_nssai_t *amf_find_s_nssai(
+     ogs_assert(served_plmn_id);
+     ogs_assert(s_nssai);
+ 
++    char buffer[8192]; // Large enough buffer for the string
++    int offset = 0;
++
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset,  "amf_find_s_nssai: served_plmn_id=%s s_nssai.sst=%d s_nssai.sd=%d num_of_plmn_support=%d\n", 
++             ogs_plmn_id_to_string2(served_plmn_id), s_nssai->sst, s_nssai->sd.v, amf_self()->num_of_plmn_support);
++
+     for (i = 0; i < amf_self()->num_of_plmn_support; i++) {
+         if (memcmp(&amf_self()->plmn_support[i].plmn_id,
+-                    served_plmn_id, OGS_PLMN_ID_LEN) != 0)
++                    served_plmn_id, OGS_PLMN_ID_LEN) != 0) {
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset,  "  plms[%d] (%s) mismatch\n", i, ogs_plmn_id_to_string2(&amf_self()->plmn_support[i].plmn_id));                        
+             continue;
++        }
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset,  "  plms[%d] (%s) match\n", i, ogs_plmn_id_to_string2(&amf_self()->plmn_support[i].plmn_id));
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset,  "  plmn[%d] num_of_s_nssai %d\n", i, amf_self()->plmn_support[i].num_of_s_nssai);
+ 
+         for (j = 0; j < amf_self()->plmn_support[i].num_of_s_nssai; j++) {
+             /* Compare S-NSSAI */
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset,  "  plmn[%d]-nssai[%d]:  sst=%d sd=%d \n", i, j, 
++                     amf_self()->plmn_support[i].s_nssai[j].sst == s_nssai->sst,
++                     amf_self()->plmn_support[i].s_nssai[j].sd.v);
+             if (amf_self()->plmn_support[i].s_nssai[j].sst == s_nssai->sst &&
+                 amf_self()->plmn_support[i].s_nssai[j].sd.v == s_nssai->sd.v) {
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset,  "  nssai matched !!\n");
++                ogs_warn("%s\n", buffer);
+                 return &amf_self()->plmn_support[i].s_nssai[j];
+             }
+         }
+     }
+-
++    ogs_warn("%s\n", buffer);
+     return NULL;
+ }
+ 
+@@ -2787,6 +2856,7 @@ static void stats_add_ran_ue(void)
+     amf_metrics_inst_global_inc(AMF_METR_GLOB_GAUGE_RAN_UE);
+     num_of_ran_ue = num_of_ran_ue + 1;
+     ogs_info("[Added] Number of gNB-UEs is now %d", num_of_ran_ue);
++    amf_list_display();
+ }
+ 
+ static void stats_remove_ran_ue(void)
+@@ -2794,6 +2864,7 @@ static void stats_remove_ran_ue(void)
+     amf_metrics_inst_global_dec(AMF_METR_GLOB_GAUGE_RAN_UE);
+     num_of_ran_ue = num_of_ran_ue - 1;
+     ogs_info("[Removed] Number of gNB-UEs is now %d", num_of_ran_ue);
++    amf_list_display();
+ }
+ 
+ int amf_instance_get_load(void)
+@@ -2970,9 +3041,15 @@ bool amf_update_allowed_nssai(amf_ue_t *amf_ue)
+      *      authentication and authorization that are available.
+      */
+ 
++    char buffer[8192]; // Large enough buffer for the string
++    int offset = 0;
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "amf_update_allowed_nssai\n");
++
+     amf_ue->allowed_nssai.num_of_s_nssai = 0;
+     amf_ue->rejected_nssai.num_of_s_nssai = 0;
+ 
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  requested_nssai.num_of_s_nssai = %d\n", amf_ue->requested_nssai.num_of_s_nssai);
++
+     if (amf_ue->requested_nssai.num_of_s_nssai) {
+         for (i = 0; i < amf_ue->requested_nssai.num_of_s_nssai; i++) {
+             ogs_slice_data_t *slice = NULL;
+@@ -3006,6 +3083,10 @@ bool amf_update_allowed_nssai(amf_ue_t *amf_ue)
+ 
+                 amf_ue->allowed_nssai.num_of_s_nssai++;
+ 
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, 
++                                "  REQUESTED, amf_ue->allowed_nssai.num_of_s_nssai -> %d , added sst=%d sd=%d \n", 
++                                amf_ue->allowed_nssai.num_of_s_nssai, allowed->sst, allowed->sd.v);
++
+             } else {
+                 rejected->sst = requested->sst;
+                 rejected->sd.v = requested->sd.v;
+@@ -3019,18 +3100,37 @@ bool amf_update_allowed_nssai(amf_ue_t *amf_ue)
+                     OGS_NAS_REJECTED_S_NSSAI_NOT_AVIALABLE_IN_PLMN;
+ 
+                 amf_ue->rejected_nssai.num_of_s_nssai++;
++
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, 
++                                "  REQUESTED, amf_ue->rejected_nssai.num_of_s_nssai -> %d , added sst=%d sd=%d \n", 
++                                amf_ue->rejected_nssai.num_of_s_nssai, rejected->sst, rejected->sd.v);
+             }
+         }
+     }
+ 
+     if (!amf_ue->allowed_nssai.num_of_s_nssai) {
++
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, 
++                                "  amf_ue->num_of_slice=%d \n", amf_ue->num_of_slice);
++
+         for (i = 0; i < amf_ue->num_of_slice; i++) {
+             ogs_slice_data_t *slice = &amf_ue->slice[i];
++
++            {
++                char buffer2[1024];
++                int offset2=0;
++                ogs_slice_data_to_string(slice, "", buffer2, &offset2, sizeof(buffer2));
++                if (offset2) ogs_warn("%s\n", buffer2);
++            }
++
+             ogs_nas_s_nssai_ie_t *allowed =
+                 &amf_ue->allowed_nssai.
+                     s_nssai[amf_ue->allowed_nssai.num_of_s_nssai];
+ 
+-            if (slice->default_indicator == true &&
++            if (
++#ifndef AMF_IGNORE_NAS_REGISTRATION_NSSAI
++                slice->default_indicator == true &&
++#endif                
+                 gnb_ta_is_supported(gnb,
+                     &amf_ue->nr_tai.plmn_id, amf_ue->nr_tai.tac,
+                     &slice->s_nssai) == true) {
+@@ -3043,10 +3143,16 @@ bool amf_update_allowed_nssai(amf_ue_t *amf_ue)
+ 
+                 amf_ue->allowed_nssai.num_of_s_nssai++;
+ 
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, 
++                                "  IMPLICIT, amf_ue->allowed_nssai.num_of_s_nssai -> %d , added sst=%d sd=%d \n", 
++                                amf_ue->allowed_nssai.num_of_s_nssai, allowed->sst, allowed->sd.v);
++
+             }
+         }
+     }
+ 
++    ogs_warn("%s\n", buffer);
++
+     if (!amf_ue->allowed_nssai.num_of_s_nssai) {
+         ogs_error("No Allowed-NSSAI");
+         ogs_error("    Number of Subscribed S-NSSAI [%d]",
+@@ -3151,3 +3257,295 @@ void amf_ue_save_to_release_session_list(amf_ue_t *amf_ue)
+         }
+     }
+ }
++
++
++
++#define APPEND_JSON(__json_str, __json_str_len, __offset, fmt, ...) \
++    do { \
++        if (__offset < __json_str_len) { \
++            int written = snprintf(__json_str + __offset, __json_str_len - __offset, fmt, ##__VA_ARGS__); \
++            if (written < 0 || (size_t)written >= __json_str_len - __offset) { \
++                ogs_warn("JSON buffer truncated at line %d", __LINE__); \
++                break; \
++            } \
++            __offset += written; \
++        } \
++    } while (0)
++
++    
++static int ran_ue_to_json(ran_ue_t* ran_ue, char *json_str, size_t json_str_len, int offset) {
++    ogs_assert(ran_ue);
++    ogs_assert(json_str && json_str_len > 0);
++
++    APPEND_JSON(json_str, json_str_len, offset, "{");
++    APPEND_JSON(json_str, json_str_len, offset, "\"ran_ue_id\": %u, ", ran_ue->index);
++    APPEND_JSON(json_str, json_str_len, offset, "\"ran_ue_ngap_id\": %llu, ", (unsigned long long)ran_ue->ran_ue_ngap_id);
++    APPEND_JSON(json_str, json_str_len, offset, "\"amf_ue_ngap_id\": %llu", (unsigned long long)ran_ue->amf_ue_ngap_id);
++    APPEND_JSON(json_str, json_str_len, offset, "}");
++
++    json_str[offset] = '\0';
++
++    return offset;
++}
++
++//
++// All elemenets are optional.  If nothing is encoded, return -1
++// else return the updated offset
++static int amf_ue_to_json(amf_ue_t* amf_ue, char *json_str, size_t json_str_len, int offset) {
++    ogs_assert(amf_ue);
++    ogs_assert(json_str && json_str_len > 0);
++
++    APPEND_JSON(json_str, json_str_len, offset, "{");
++
++    bool first_field = true;
++
++    if (AMF_UE_HAVE_SUCI(amf_ue)) {
++        APPEND_JSON(json_str, json_str_len, offset, "%s\"suci\": \"%s\"", first_field ? "" : ", ", amf_ue->suci);
++        first_field = false;
++    }
++    if (amf_ue->supi) {
++        APPEND_JSON(json_str, json_str_len, offset, "%s\"supi\": \"%s\"", first_field ? "" : ", ", amf_ue->supi);
++        first_field = false;
++    }
++
++    if (ogs_plmn_id_hexdump(&amf_ue->home_plmn_id)) {
++        const char *home_plmn = ogs_plmn_id_to_string2(&amf_ue->home_plmn_id);
++        APPEND_JSON(json_str, json_str_len, offset, "%s\"home_plmn_id\": \"%s\"", first_field ? "" : ", ", home_plmn);
++        first_field = false;
++    }
++
++    if (amf_ue->current.m_tmsi) {
++        /* AMF has a VALID GUTI */
++        ogs_plmn_id_t guti_plmn;
++        ogs_nas_to_plmn_id(&guti_plmn, &amf_ue->current.guti.nas_plmn_id);
++
++        APPEND_JSON(json_str, json_str_len, offset, "%s\"current-guti\": { \"plmn_id\": \"%s\", \"amf_id\": \"%x\", \"m_tmsi\": %u }",
++                    first_field ? "" : ", ",
++                    ogs_plmn_id_to_string2(&guti_plmn),
++                    ogs_amf_id_hexdump(&amf_ue->next.guti.amf_id),
++                    amf_ue->current.guti.m_tmsi);
++        first_field = false;
++    }
++    if (amf_ue->next.m_tmsi) {
++        /* AMF has a VALID GUTI */
++        ogs_plmn_id_t guti_plmn;
++        ogs_nas_to_plmn_id(&guti_plmn, &amf_ue->next.guti.nas_plmn_id);
++
++        APPEND_JSON(json_str, json_str_len, offset, "%s\"next-guti\": { \"plmn_id\": \"%s\", \"amf_id\": \"%x\", \"m_tmsi\": %u }",
++                    first_field ? "" : ", ",
++                    ogs_plmn_id_to_string2(&guti_plmn),
++                    ogs_amf_id_hexdump(&amf_ue->next.guti.amf_id),
++                    amf_ue->next.guti.m_tmsi);
++        first_field = false;
++    }
++
++    uint32_t plmn_id_hex = ogs_plmn_id_hexdump(&amf_ue->nr_tai.plmn_id);
++    if (plmn_id_hex) {
++        APPEND_JSON(json_str, json_str_len, offset, "%s\"nr_tai\": { \"plmn_id\": \"%06x\", \"tac\": \"%d\" }", first_field ? "" : ", ", plmn_id_hex, amf_ue->nr_tai.tac.v);
++        first_field = false;
++    }
++
++    plmn_id_hex = ogs_plmn_id_hexdump(&amf_ue->nr_cgi.plmn_id);
++    if (plmn_id_hex) {
++        APPEND_JSON(json_str, json_str_len, offset, "%s\"nr_cgi\": { \"plmn_id\": \"%06x\", \"cell_id\": \"%llx\" }", first_field ? "" : ", ", plmn_id_hex, (long long)amf_ue->nr_cgi.cell_id);
++        first_field = false;
++    }
++
++    if (CM_CONNECTED(amf_ue)) {
++        ran_ue_t *ran_ue = ran_ue_find_by_id(amf_ue->ran_ue_id);
++        if (ran_ue) {
++            APPEND_JSON(json_str, json_str_len, offset, "%s\"ran_ue\": ", first_field ? "" : ", ");
++            offset = ran_ue_to_json(ran_ue, json_str, json_str_len, offset);
++            first_field = false;
++        } else {
++            ogs_error("ran_ue_find_by_id failed for ran_ue_id: %u", amf_ue->ran_ue_id);
++        }
++    }
++
++    APPEND_JSON(json_str, json_str_len, offset, "}");
++
++    if (first_field) {
++        return -1;
++    }
++
++    json_str[offset] = '\0';
++    return offset;
++}
++
++static inline uint64_t get_epoch_ns(void) {
++
++    struct timespec ts;
++    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
++        perror("clock_gettime failed");
++        return 0;
++    }
++
++    // Convert to nanoseconds since epoch
++    uint64_t timestamp_ns = (uint64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
++
++    return timestamp_ns;
++}
++
++static void ran_ue_log(ran_ue_t* ran_ue, const char* event) {
++    char json_str[16384];
++    int offset = 0;
++    json_str[offset] = 0;
++
++    APPEND_JSON(json_str, sizeof(json_str), offset, "{");
++    APPEND_JSON(json_str, sizeof(json_str), offset, "\"timestamp\": %ld", get_epoch_ns());
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"stream_index\": \"open5gs\"");
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"event\": \"%s\"", event);
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"context_type\": \"ran-ue\"");
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"context\":");
++    offset = ran_ue_to_json(ran_ue, json_str, sizeof(json_str), offset);
++    APPEND_JSON(json_str, sizeof(json_str), offset, "}");
++    json_str[offset] = 0;
++
++    amf_rlog(json_str);
++}
++
++static void amf_ue_log(amf_ue_t* amf_ue, const char* event) {
++    char json_str[16384];
++    int offset = 0;
++    json_str[offset] = 0;
++
++    APPEND_JSON(json_str, sizeof(json_str), offset, "{");
++    APPEND_JSON(json_str, sizeof(json_str), offset, "\"timestamp\": %ld", get_epoch_ns());
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"stream_index\": \"open5gs\"");
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"event\": \"%s\"", event);
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"context_type\": \"amf-ue\"");
++    APPEND_JSON(json_str, sizeof(json_str), offset, ", \"context\":");
++    offset = amf_ue_to_json(amf_ue, json_str, sizeof(json_str), offset);
++    if (offset == -1) {
++        // nothing was encoded for this UE, so dont log anything
++        return;
++    }
++    APPEND_JSON(json_str, sizeof(json_str), offset, "}");
++    json_str[offset] = 0;
++
++    amf_rlog(json_str);
++}
++
++static void amf_rlog(const char* json_msg)
++{
++    int sockfd;
++    struct sockaddr_in dest_addr;
++
++    if (!json_msg) {
++        ogs_error("amf_rlog: NULL message");
++        return;
++    }
++    size_t json_msg_len = strlen(json_msg);
++    if (json_msg_len < 1) {
++        ogs_error("amf_rlog: empty message");
++        return;
++    }
++
++    amf_gnb_t *gnb = NULL, *next_gnb = NULL;
++    ogs_list_for_each_safe(&self.gnb_list, next_gnb, gnb) {   
++        
++        char buf[OGS_ADDRSTRLEN];
++
++        // Create UDP socket
++        sockfd = socket(AF_INET, SOCK_DGRAM, 0);
++        if (sockfd < 0) {
++            ogs_error("amf_rlog: socket creation failed");
++            continue;
++        }
++
++        // Set destination address
++        memset(&dest_addr, 0, sizeof(dest_addr));
++        dest_addr.sin_family = AF_INET;
++        dest_addr.sin_port = htons(self.rlogger.rlog_port);
++        if (inet_pton(AF_INET, OGS_ADDR(gnb->sctp.addr, buf), &dest_addr.sin_addr) <= 0) {
++            ogs_error("amf_rlog: Invalid address/ Address not supported");
++            close(sockfd);
++            continue;
++        }
++
++        // Send the json_msg
++        ssize_t sent_bytes = sendto(sockfd, json_msg, json_msg_len, 0,
++                                    (struct sockaddr *)&dest_addr, sizeof(dest_addr));
++        if (sent_bytes < 0) {
++            ogs_error("amf_rlog: sendto failed");
++            close(sockfd);
++            continue;
++        }
++
++        ogs_info("amf_rlog: Sent %zd bytes to %s:%d\n", sent_bytes, OGS_ADDR(gnb->sctp.addr, buf), self.rlogger.rlog_port);
++
++        close(sockfd);
++    }
++}
++
++static void amf_list_display(void) {
++
++    static char buffer[10386]; // Large enough buffer for the string
++    int offset = 0;
++    int i;
++    int verbose = 0;
++    int count = 0;         // Counter for entries displayed
++    int total_count = 0;         // Counter for entries displayed
++    int max_count = 10;
++
++    amf_ue_t *amf_ue = NULL;
++    ogs_list_for_each(&self.amf_ue_list, amf_ue) {
++
++        if (count < max_count) {
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "\nue:\n");
++
++            if (amf_ue->suci)
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  suci : %s:\n", amf_ue->suci);
++
++            if (amf_ue->supi)
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  supi : %s:\n", amf_ue->supi);
++
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  num_of_slice : %d:\n", amf_ue->num_of_slice);
++
++            if (verbose) {
++                for (i = 0; i < amf_ue->num_of_slice; i++) {
++                    ogs_slice_data_to_string(&amf_ue->slice[i], "    ", buffer, &offset, sizeof(buffer));
++                }
++            }
++            count++;
++	    }
++        total_count++;
++    }
++
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, 
++                       "\nDisplayed %d out of %d UEs\n", count, total_count);
++
++    ogs_info("%s", buffer);
++}
++
++
++char* amf_gnb_to_string(amf_gnb_t *amf_gnb) {
++    static char buffer[8192]; // Large enough buffer for the string
++    int offset = 0;
++
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "gnb_id: %u\n", amf_gnb->gnb_id);
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "plmn_id: %s\n", ogs_plmn_id_to_string2(&amf_gnb->plmn_id));
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "ng_setup_success: %s\n", amf_gnb->state.ng_setup_success ? "true" : "false");
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "max_num_of_ostreams: %d\n", amf_gnb->max_num_of_ostreams);
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "ostream_id: %u\n", amf_gnb->ostream_id);
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "num_of_supported_ta_list: %d\n", amf_gnb->num_of_supported_ta_list);
++
++    for (int i = 0; i < amf_gnb->num_of_supported_ta_list; i++) {
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  supported_ta_list[%d].tac: %s\n", i, ogs_uint24_to_0string(amf_gnb->supported_ta_list[i].tac));
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  supported_ta_list[%d].num_of_bplmn_list: %d\n", i, amf_gnb->supported_ta_list[i].num_of_bplmn_list);
++        for (int j = 0; j < amf_gnb->supported_ta_list[i].num_of_bplmn_list; j++) {
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "    bplmn_list[%d].plmn_id: %s\n", j, ogs_plmn_id_to_string2(&amf_gnb->supported_ta_list[i].bplmn_list[j].plmn_id));
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "    bplmn_list[%d].num_of_s_nssai: %d\n", j, amf_gnb->supported_ta_list[i].bplmn_list[j].num_of_s_nssai);
++            for (int k = 0; k < amf_gnb->supported_ta_list[i].bplmn_list[j].num_of_s_nssai; k++) {
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "      s_nssai[%d]: %s\n", k, ogs_s_nssai_to_string(&amf_gnb->supported_ta_list[i].bplmn_list[j].s_nssai[k]));
++            }
++        }
++    }
++
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "rat_type: %d\n", amf_gnb->rat_type);
++    // ng_reset_ack and ran_ue_list need appropriate string conversions based on their definitions
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "ng_reset_ack: %p\n", (void*)amf_gnb->ng_reset_ack);
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "ran_ue_list: %p\n", (void*)&amf_gnb->ran_ue_list);
++
++    return buffer;
++}
+diff --git a/src/amf/context.h b/src/amf/context.h
+index 7aff61206..d7b39b6c4 100644
+--- a/src/amf/context.h
++++ b/src/amf/context.h
+@@ -130,6 +130,11 @@ typedef struct amf_context_s {
+         } t3502, t3512;
+     } time;
+ 
++    struct {
++        bool enabled;
++        uint16_t rlog_port;
++    } rlogger;
++
+ } amf_context_t;
+ 
+ typedef struct amf_gnb_s {
+@@ -1098,6 +1103,8 @@ bool amf_ue_is_rat_restricted(amf_ue_t *amf_ue);
+ int amf_instance_get_load(void);
+ void amf_ue_save_to_release_session_list(amf_ue_t *amf_ue);
+ 
++char* amf_gnb_to_string(amf_gnb_t *amf_gnb);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/src/amf/gmm-handler.c b/src/amf/gmm-handler.c
+index 68ada928e..bbf1e8b36 100644
+--- a/src/amf/gmm-handler.c
++++ b/src/amf/gmm-handler.c
+@@ -357,7 +357,7 @@ ogs_nas_5gmm_cause_t gmm_handle_registration_update(
+ {
+     amf_sess_t *sess = NULL;
+     uint16_t psimask;
+-    int i = 0, served_tai_index = 0;
++    int served_tai_index = 0;
+ 
+     ogs_nas_5gs_tracking_area_identity_t *last_visited_registered_tai = NULL;
+     ogs_nas_uplink_data_status_t *uplink_data_status = NULL;
+@@ -368,6 +368,10 @@ ogs_nas_5gmm_cause_t gmm_handle_registration_update(
+     ogs_assert(ran_ue);
+     ogs_assert(registration_request);
+ 
++    char buffer[8192]; // Large enough buffer for the string
++    int offset = 0;
++    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "gmm_handle_registration_update\n");
++
+     last_visited_registered_tai =
+         &registration_request->last_visited_registered_tai;
+     ogs_assert(last_visited_registered_tai);
+@@ -419,20 +423,49 @@ ogs_nas_5gmm_cause_t gmm_handle_registration_update(
+     }
+ 
+     if (registration_request->presencemask &
+-        OGS_NAS_5GS_REGISTRATION_REQUEST_REQUESTED_NSSAI_PRESENT) {
++        OGS_NAS_5GS_REGISTRATION_REQUEST_REQUESTED_NSSAI_PRESENT) 
++    {
++#ifdef AMF_IGNORE_NAS_REGISTRATION_NSSAI
++        int i = 0;
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  IGNORE OGS_NAS_5GS_REGISTRATION_REQUEST_REQUESTED_NSSAI_PRESENT\n");
++        int num_of_s_nssai = ogs_nas_parse_nssai(
++                    amf_ue->requested_nssai.s_nssai,
++                    &registration_request->requested_nssai);
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "    num_of_s_nssai %d \n", num_of_s_nssai);
++        for (i = 0; i < num_of_s_nssai; i++) {
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "      [%d] sst %d sd %d\n", i,
++                amf_ue->requested_nssai.s_nssai[i].sst, 
++                amf_ue->requested_nssai.s_nssai[i].sd.v);
++        }
++        ogs_warn("%s\n", buffer);
++        offset = 0;
++        amf_ue->requested_nssai.num_of_s_nssai = 0;
++#else
++        int i=0;
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  OGS_NAS_5GS_REGISTRATION_REQUEST_REQUESTED_NSSAI_PRESENT\n");
+ 
+         amf_ue->requested_nssai.num_of_s_nssai =
+             ogs_nas_parse_nssai(
+                     amf_ue->requested_nssai.s_nssai,
+                     &registration_request->requested_nssai);
++        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "    num_of_s_nssai %d \n", amf_ue->requested_nssai.num_of_s_nssai);
+ 
+         for (i = 0; i < amf_ue->requested_nssai.num_of_s_nssai; i++) {
++
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "      [%d] sst %d sd %d\n", i,
++                amf_ue->requested_nssai.s_nssai[i].sst, 
++                amf_ue->requested_nssai.s_nssai[i].sd.v);
++
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "    calling amf_find_s_nssai \n");
++
+             if (amf_find_s_nssai(
+                     &amf_ue->nr_tai.plmn_id,
+                     (ogs_s_nssai_t *)&amf_ue->requested_nssai.s_nssai[i]))
+                 break;
+         }
+ 
++        ogs_warn("%s\n", buffer);
++
+         if (i == amf_ue->requested_nssai.num_of_s_nssai) {
+             ogs_error("Cannot find Requested NSSAI [%d]",
+                     amf_ue->requested_nssai.num_of_s_nssai);
+@@ -446,6 +479,7 @@ ogs_nas_5gmm_cause_t gmm_handle_registration_update(
+             }
+             return OGS_5GMM_CAUSE_NO_NETWORK_SLICES_AVAILABLE;
+         }
++#endif
+     }
+ 
+     if (registration_request->presencemask &
+@@ -1211,6 +1245,8 @@ int gmm_handle_ul_nas_transport(ran_ue_t *ran_ue, amf_ue_t *amf_ue,
+         gsm_header = (ogs_nas_5gsm_header_t *)payload_container->buffer;
+         ogs_assert(gsm_header);
+ 
++        ogs_info("gsm_header->message_type %d", gsm_header->message_type);
++
+         if (gsm_header->message_type ==
+                 OGS_NAS_5GS_PDU_SESSION_ESTABLISHMENT_REQUEST) {
+             sess = amf_sess_find_by_psi(amf_ue, *pdu_session_id);
+@@ -1282,6 +1318,24 @@ int gmm_handle_ul_nas_transport(ran_ue_t *ran_ue, amf_ue_t *amf_ue,
+             dnn = &ul_nas_transport->dnn;
+             ogs_assert(dnn);
+ 
++            char buffer[8192]; // Large enough buffer for the string
++            int offset = 0;
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "[%s] OGS_NAS_5GS_PDU_SESSION_ESTABLISHMENT_REQUEST\n", amf_ue->supi);
++            for (i = 0; i < amf_ue->num_of_slice; i++) {
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  UE num_of_slice=%d num_allowed_nssi = %d\n",
++                                    amf_ue->num_of_slice, amf_ue->allowed_nssai.num_of_s_nssai);
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  UE slice[%d] : sst=%d sd=%d num_of_sessions=%d\n", i, 
++                                   amf_ue->slice[i].s_nssai.sst, amf_ue->slice[i].s_nssai.sd.v, amf_ue->slice[i].num_of_session);
++                for (int s = 0; s < amf_ue->slice[i].num_of_session; s++) {
++                    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "      sess[%d] : name=%s default_dnn_indicator=%d ue_ip=%s\n", s, 
++                                    amf_ue->slice[i].session[s].name, amf_ue->slice[i].session[s].default_dnn_indicator, 
++                                    ogs_ipv4_to_string(amf_ue->slice[i].session[s].ue_ip.addr));
++                }
++            }
++            for (j = 0; j < amf_ue->allowed_nssai.num_of_s_nssai; j++) {
++                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  UE allowed_nssai[%d] : sst=%d sd=%d\n", j, 
++                                   amf_ue->allowed_nssai.s_nssai[j].sst, amf_ue->allowed_nssai.s_nssai[j].sd.v);
++            }
+ 
+             for (i = 0; i < amf_ue->num_of_slice; i++) {
+                 if (i >= OGS_MAX_NUM_OF_SLICE) {
+@@ -1293,6 +1347,8 @@ int gmm_handle_ul_nas_transport(ran_ue_t *ran_ue, amf_ue_t *amf_ue,
+                         OGS_NAS_5GS_UL_NAS_TRANSPORT_S_NSSAI_PRESENT) {
+                     ogs_nas_s_nssai_ie_t ie;
+                     if (ogs_nas_parse_s_nssai(&ie, nas_s_nssai) != 0) {
++                        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  OGS_NAS_5GS_UL_NAS_TRANSPORT_S_NSSAI_PRESENT : IE: sst=%d sd=%d\n", 
++                                           ie.sst, ie.sd.v);
+                         if (ie.sst == amf_ue->slice[i].s_nssai.sst &&
+                             ie.sd.v == amf_ue->slice[i].s_nssai.sd.v) {
+ 
+@@ -1321,9 +1377,15 @@ int gmm_handle_ul_nas_transport(ran_ue_t *ran_ue, amf_ue_t *amf_ue,
+                         amf_ue->slice[i].s_nssai.sd.v ==
+                             amf_ue->allowed_nssai.s_nssai[j].sd.v) {
+ 
++                        offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  UE slice idx %d matches allowed_nssai idx %d \n", i, j);
++
+                         if (ul_nas_transport->presencemask &
+                                 OGS_NAS_5GS_UL_NAS_TRANSPORT_DNN_PRESENT) {
+ 
++                            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  OGS_NAS_5GS_UL_NAS_TRANSPORT_DNN_PRESENT\n");
++
++                            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  amf_ue->slice[%d].num_of_session=%d\n", i, amf_ue->slice[i].num_of_session);
++
+                             for (k = 0;
+                                     k < amf_ue->slice[i].num_of_session; k++) {
+                                 if (k >= OGS_MAX_NUM_OF_SESS) {
+@@ -1333,6 +1395,11 @@ int gmm_handle_ul_nas_transport(ran_ue_t *ran_ue, amf_ue_t *amf_ue,
+                                         OGS_MAX_NUM_OF_SESS);
+                                     break;
+                                 }
++
++                                
++                                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "    slice[%d].session[%d].name=%s dnn=%s \n", 
++                                                   i, k, amf_ue->slice[i].session[k].name, dnn->value);
++
+                                 if (!ogs_strcasecmp(dnn->value,
+                                             amf_ue->slice[i].session[k].name)) {
+ 
+@@ -1342,23 +1409,31 @@ int gmm_handle_ul_nas_transport(ran_ue_t *ran_ue, amf_ue_t *amf_ue,
+                                     if (sess->dnn)
+                                         ogs_free(sess->dnn);
+                                     sess->dnn = ogs_strdup(dnn->value);
++                                    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "        match!!, sess->dnn = %s\n", sess->dnn);
+                                     ogs_assert(sess->dnn);
+ 
+                                 } else {
++                                    offset += snprintf(buffer + offset, sizeof(buffer) - offset, "        mismatch!!\n");
+                                     continue;
+                                 }
+                             }
+ 
+                         } else {
+ 
++                            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "  NOT OGS_NAS_5GS_UL_NAS_TRANSPORT_DNN_PRESENT\n");
++
+                             selected_slice = amf_ue->slice + i;
+                             ogs_assert(selected_slice);
+ 
++                            offset += snprintf(buffer + offset, sizeof(buffer) - offset, "     selected_slice[%d] num_of_sessions=%d\n", 
++                                           i, selected_slice->num_of_session);
++
+                             if (selected_slice->num_of_session) {
+                                 if (sess->dnn)
+                                     ogs_free(sess->dnn);
+                                 sess->dnn = ogs_strdup(
+                                         selected_slice->session[0].name);
++                                offset += snprintf(buffer + offset, sizeof(buffer) - offset, "        sess->dnn = %s\n", sess->dnn);
+                                 ogs_assert(sess->dnn);
+                             }
+                         }
+@@ -1366,6 +1441,9 @@ int gmm_handle_ul_nas_transport(ran_ue_t *ran_ue, amf_ue_t *amf_ue,
+                 }
+             }
+ 
++            offset += snprintf(buffer + offset, sizeof(buffer) - offset, " selected_slice=%p, sess->dnn=%p\n", selected_slice, sess->dnn);
++            ogs_warn("%s\n", buffer);
++
+             if (!selected_slice || !sess->dnn) {
+                 ogs_warn("[%s] Ue requested DNN \"%s\" Not Supported OR "
+                             "Not Subscribed in the Slice", amf_ue->supi, dnn->value);
+diff --git a/src/amf/gmm-sm.c b/src/amf/gmm-sm.c
+index 82b3dd250..17c6cfe41 100644
+--- a/src/amf/gmm-sm.c
++++ b/src/amf/gmm-sm.c
+@@ -587,8 +587,12 @@ void gmm_state_de_registered(ogs_fsm_t *s, amf_event_t *e)
+                     }
+ 
+                     if (r != OGS_OK) {
+-                        if (!(AMF_UE_HAVE_SUCI(amf_ue) ||
+-                                AMF_UE_HAVE_SUPI(amf_ue))) {
++#ifdef AMF_FORCE_IDENTITY_PROCEDURE
++                            ogs_warn("forcing IDENTITY_PROCEDURE\n");
++#else                        
++                        if (!(AMF_UE_HAVE_SUCI(amf_ue) || AMF_UE_HAVE_SUPI(amf_ue))) 
++#endif                        
++                        {
+                             CLEAR_AMF_UE_TIMER(amf_ue->t3570);
+                             r = nas_5gs_send_identity_request(amf_ue);
+                             ogs_expect(r == OGS_OK);
+@@ -1220,8 +1224,12 @@ void gmm_state_registered(ogs_fsm_t *s, amf_event_t *e)
+                     }
+ 
+                     if (r != OGS_OK) {
+-                        if (!(AMF_UE_HAVE_SUCI(amf_ue) ||
+-                                AMF_UE_HAVE_SUPI(amf_ue))) {
++#ifdef AMF_FORCE_IDENTITY_PROCEDURE
++            ogs_warn("forcing IDENTITY_PROCEDURE\n");
++#else
++                        if (!(AMF_UE_HAVE_SUCI(amf_ue) || AMF_UE_HAVE_SUPI(amf_ue))) 
++#endif                        
++                        {
+                             CLEAR_AMF_UE_TIMER(amf_ue->t3570);
+                             r = nas_5gs_send_identity_request(amf_ue);
+                             ogs_expect(r == OGS_OK);
+@@ -1391,7 +1399,12 @@ static void common_register_state(ogs_fsm_t *s, amf_event_t *e,
+                 break;
+             }
+ 
+-            if (!AMF_UE_HAVE_SUCI(amf_ue)) {
++#ifdef AMF_FORCE_IDENTITY_PROCEDURE
++            ogs_warn("forcing IDENTITY_PROCEDURE\n");
++#else
++            if (!AMF_UE_HAVE_SUCI(amf_ue)) 
++#endif
++            {
+                 CLEAR_AMF_UE_TIMER(amf_ue->t3570);
+                 r = nas_5gs_send_identity_request(amf_ue);
+                 ogs_expect(r == OGS_OK);
+@@ -3003,7 +3016,12 @@ void gmm_state_exception(ogs_fsm_t *s, amf_event_t *e)
+                 break;
+             }
+ 
+-            if (!AMF_UE_HAVE_SUCI(amf_ue)) {
++#ifdef AMF_FORCE_IDENTITY_PROCEDURE
++            ogs_warn("forcing IDENTITY_PROCEDURE\n");
++#else
++            if (!AMF_UE_HAVE_SUCI(amf_ue)) 
++#endif
++            {
+                 CLEAR_AMF_UE_TIMER(amf_ue->t3570);
+                 r = nas_5gs_send_identity_request(amf_ue);
+                 ogs_expect(r == OGS_OK);
+diff --git a/src/amf/ngap-handler.c b/src/amf/ngap-handler.c
+index bbb316bf6..a981c320b 100644
+--- a/src/amf/ngap-handler.c
++++ b/src/amf/ngap-handler.c
+@@ -354,6 +354,9 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
+         return;
+     }
+ 
++    char* s =  amf_gnb_to_string(gnb);
++    ogs_warn("ngap_handle_ng_setup_request: \n%s\n", s);
++
+     /*
+      * TS38.413
+      * Section 8.7.1.4 Abnormal Conditions
