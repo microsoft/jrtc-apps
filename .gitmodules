@@ -10,3 +10,6 @@
 [submodule "containers/Docker/srsRAN_4G"]
 	path = containers/Docker/srsRAN_4G
 	url = https://github.com/srsran/srsRAN_4G.git
+[submodule "Open5GS/p3/open5gs"]
+	path = Open5GS/p3/open5gs
+	url = https://github.com/open5gs/open5gs.git
