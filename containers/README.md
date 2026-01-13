@@ -20,4 +20,8 @@ cd containers/Docker
 sudo ./build_base.sh [-b <base-image-tag>]
 sudo ./build_srs_jbpf.sh [-b <base-image-tag>] [-s <srs-image-tag>] [-c]   # Use -c for '--no-cache'
 sudo ./build_srs_jbpf_sdk.sh [-s <srs-image-tag>]
+sudo ./build_srs_jbpf_zmq.sh [-b <base-image-tag>] [-s <srs-image-tag>]
+sudo ./build_srs_ue_base.sh [-b <base-image-tag>] [-s <srs-image-tag>] [-c]   # Use -c for '--no-cache'
+sudo ./build_srs_ue.sh [-s <srs-image-tag>] [-c]   # Use -c for '--no-cache'
+
 ```
