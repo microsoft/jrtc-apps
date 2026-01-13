@@ -11,6 +11,10 @@ metadata:
 data:
   config.json: |-
       {{ $.Values | toJson }}
+{{- if not $.Values.zmq.enabled }}
+  default_config.yaml: |-
+{{ $.Values.srs_ran_config | toYaml | nindent 4 }}
+{{- end }}
 
 ---
 apiVersion: apps/v1
