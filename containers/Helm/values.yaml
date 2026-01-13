@@ -325,6 +325,8 @@ debug_mode:
 
 # Below is the yaml section that will be directly copied into the srsRAN config file.
 # Note that the install script will update some of the values in this section with the values from the Helm chart.
+# Note that the following is not used in ZMQ.  For that, most of the parameters are fixed to use 10 MHz 
+#    bandwidth.  To customize it, pass a separate yaml to the Helm chart.
 srs_ran_config:
   cu_cp:
     amf:
