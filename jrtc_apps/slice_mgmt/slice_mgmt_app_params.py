@@ -1,0 +1,22 @@
+
+# Config for periodicity of sending SET request
+slice_update_periodicity_secs = 300
+# which SFN to perform the re-allocation.  "None" = immediately
+slice_update_sfn = 20
+# low and high "maxPRB" percentages
+slice_prb_percentage_low = 30
+slice_prb_percentage_high = 70
+# which slot to perform the re-allocation.  "None" = immediately
+# Note that if you select a slot which is not an downlink slot in the configured tdd pattern, the reconfig will never be triggered
+slice_update_slot_index = None
+# If slice_update_sfn=None and slice_update_slot_index=None, the reconfig config will be triggered on the next downlink slot
+
+
+# Enable / Disable logging to Log Analytics
+la_enabled = False
+la_msgs_per_batch = 100
+la_bytes_per_batch = 1024 * 1024  # 1 MB per batch
+la_tx_timeout_secs = 5            # Timeout for batch sending (5 seconds)
+la_stats_period_secs = 10
+
+

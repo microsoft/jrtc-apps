@@ -21,6 +21,7 @@ app:
       - ${JBPF_CODELETS}/mac/mac_sched_crc_stats.py
       - ${JBPF_CODELETS}/mac/mac_sched_phr_stats.py
       - ${JBPF_CODELETS}/mac/mac_sched_uci_stats.py
+      - ${JBPF_CODELETS}/mac/mac_sched_harq_stats.py
 
       - ${JBPF_CODELETS}/rlc/rlc_dl_stats.py
       - ${JBPF_CODELETS}/rlc/rlc_ul_stats.py

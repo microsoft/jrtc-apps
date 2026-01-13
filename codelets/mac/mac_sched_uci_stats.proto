@@ -17,17 +17,10 @@ message uci_uint64_stats_item {
    required uint64 max = 4;
 }
 
-message uci_harq_stats_item {
-   required uint32 ack_count = 1;
-   required uint32 nack_count = 2;
-   required uint32 dtx_count = 3;
-}
-
 message csi_stats_item {
    optional uci_stat_item_t ri = 1;
    optional uci_stat_item_t cqi = 2;
 }
-
 
 message t_uci_stats {
    required uint32 du_ue_index = 1;
@@ -36,9 +29,7 @@ message t_uci_stats {
 
    optional uci_uint64_stats_item time_advance_offset = 3;
 
-   required uci_harq_stats_item harq = 4;
-
-   optional csi_stats_item csi = 5;
+   optional csi_stats_item csi = 4;
 }
 
 message uci_stats {

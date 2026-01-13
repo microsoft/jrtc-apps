@@ -10,8 +10,8 @@ INC= -I${JBPF_OUT_DIR}/inc -I${SRSRAN_INC_DIR} -I${NANO_PB} \
 
 # Use to disable JBPF_PATH printf
 # Use to enable JBPF printf - useful in developing tests
-CFLAGS = -O2 -target bpf -Wall -DJBPF_EXPERIMENTAL_FEATURES -DJBPF_DEBUG_ENABLED -D__x86_64__ -Wno-reorder-init-list  
-CXXFLAGS = -O2 -target bpf -Wall -std=gnu++17 -DJBPF_EXPERIMENTAL_FEATURES -DJBPF_DEBUG_ENABLED -D__x86_64__ -fpermissive -Wno-incompatible-pointer-types -Wno-pedantic -Wno-reorder-init-list 
+CFLAGS = -O2 -target bpf -Wall -DJBPF_EXPERIMENTAL_FEATURES -DJBPF_DEBUG_ENABLED -D__x86_64__ -DFMT_USE_BITINT=0 -Wno-reorder-init-list  
+CXXFLAGS = -O2 -target bpf -Wall -std=gnu++17 -DJBPF_EXPERIMENTAL_FEATURES -DJBPF_DEBUG_ENABLED -D__x86_64__ -DFMT_USE_BITINT=0 -fpermissive -Wno-incompatible-pointer-types -Wno-pedantic -Wno-reorder-init-list 
 
 C_SOURCES = $(wildcard *.c)
 CPP_SOURCES = $(wildcard *.cpp)

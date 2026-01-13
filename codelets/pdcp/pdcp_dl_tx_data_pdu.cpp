@@ -10,6 +10,7 @@
 
 #include "../utils/misc_utils.h"
 #include "../utils/hashmap_utils.h"
+#include "../utils/stats_utils.h"
 
 
 #define SEC(NAME) __attribute__((section(NAME), used))
@@ -96,22 +97,22 @@ uint64_t jbpf_main(void* state)
     // update window_info
     const jbpf_queue_info_t* queue_info = &pdcp_ctx.window_info;
     if (queue_info->used) {
-        PDCP_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_pkts, queue_info->num_pkts);
-        PDCP_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_bytes, queue_info->num_bytes);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_pkts, queue_info->num_pkts);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_bytes, queue_info->num_bytes);
     }
 
     ///////////////////////////////////////////////////////
     // update data_pdu_tx_bytes / data_pdu_retx_bytes
     if (is_retx) {
-        PDCP_TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].data_pdu_retx_bytes, pdu_length);
+        TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].data_pdu_retx_bytes, pdu_length);
     } else {
-        PDCP_TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].data_pdu_tx_bytes, pdu_length);
+        TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].data_pdu_tx_bytes, pdu_length);
     }
 
     ///////////////////////////////////////////////////////
     // update sdu_tx_latency
     if (latency_set) {
-        PDCP_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_tx_latency, latency_ns);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_tx_latency, latency_ns);
         out->stats[ind % MAX_NUM_UE_RB].has_sdu_tx_latency = true;
     }
 

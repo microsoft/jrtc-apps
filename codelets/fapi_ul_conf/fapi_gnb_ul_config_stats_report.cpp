@@ -5,8 +5,6 @@
 
 #include "jbpf_srsran_contexts.h"
 
-#include "srsran/fapi/messages.h"
-
 #include "fapi_gnb_ul_config_stats.pb.h"
 
 #define SEC(NAME) __attribute__((section(NAME), used))

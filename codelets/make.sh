@@ -3,9 +3,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-SDK_IMAGE_TAG=latest
 CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 source $(dirname $CURRENT_DIR)/set_vars.sh
+SDK_IMAGE_TAG=$SRSRAN_IMAGE_TAG
 
 Help()
 {

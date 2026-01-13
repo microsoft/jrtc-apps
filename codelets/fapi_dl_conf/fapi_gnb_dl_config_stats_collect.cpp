@@ -5,7 +5,7 @@
 
 #include "jbpf_srsran_contexts.h"
 
-#include "srsran/fapi/messages.h"
+#include "srsran/fapi/messages/dl_tti_request.h"
 
 #include "fapi_gnb_dl_config_stats.pb.h"
 

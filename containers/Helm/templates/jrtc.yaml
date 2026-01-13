@@ -63,23 +63,22 @@ spec:
 
 
 
-{{- if $.Values.jrtc_controller.app_json_input.enabled }}
+{{- if $.Values.udp_forwarder.enabled }}
 ---
-# DNS name: jrtc-json-input.{{ .Release.Namespace }}.svc.cluster.local
+# DNS name: jrtc-udp-input.{{ .Release.Namespace }}.svc.cluster.local
 apiVersion: v1
 kind: Service
 metadata:
-  name: jrtc-json-input
+  name: jrtc-udp-input
   namespace: {{ .Release.Namespace }}
   labels:
     app: jrtc
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
     - name: udp
-      port: 20790
-      targetPort: 20790
-      nodePort: {{ .Values.jrtc_controller.app_json_input.port }}
+      port: {{ $.Values.udp_forwarder.port }}
+      targetPort: {{ $.Values.udp_forwarder.port }}
       protocol: UDP
   selector:
     app: jrtc-service
@@ -180,6 +179,8 @@ spec:
         tty: true
         stdin: true
         env:
+          - name: HOSTNAME
+            value: "{{ $.Values.HOSTNAME }}"
           - name: JRTC_PATH
             value: "/jrtc"
           - name: JRTC_APP_PATH
@@ -192,9 +193,9 @@ spec:
           - name: LA_PRIMARY_KEY
             value: {{ $.Values.jrtc_controller.log_analytics.primary_key }}
         {{- end }}
-        {{- if $.Values.jrtc_controller.app_json_input.enabled }}
+        {{- if $.Values.udp_forwarder.enabled }}
           - name: JRTC_JSON_INPUT_PORT
-            value: "{{ .Values.jrtc_controller.app_json_input.port }}"
+            value: "{{ $.Values.udp_forwarder.port }}"
         {{- end }}
         resources:
           limits:

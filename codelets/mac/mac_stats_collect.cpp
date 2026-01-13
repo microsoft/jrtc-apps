@@ -9,6 +9,7 @@
 #include "mac_sched_bsr_stats.pb.h"
 #include "mac_sched_phr_stats.pb.h"
 #include "mac_sched_uci_stats.pb.h"
+#include "mac_sched_harq_stats.pb.h"
 
 
 #include "jbpf_defs.h"
@@ -16,9 +17,9 @@
 
 #include "../utils/misc_utils.h"
 #include "../utils/hashmap_utils.h"
+#include "mac_helpers.h"
 
 
-#define MAX_NUM_UE 32
 #define MAX_NUM_UE_CELL (128)
 
 
@@ -136,6 +137,8 @@ struct jbpf_load_map_def SEC("maps") uci_not_empty = {
     .value_size = sizeof(uint32_t),
     .max_entries = 1,
 };
+
+
 
 
 //#define DEBUG_PRINT 1
@@ -285,7 +288,6 @@ uint64_t jbpf_main(void *state)
         if (ret < 0) {
             return JBPF_CODELET_FAILURE;
         }
-
     }
 
 

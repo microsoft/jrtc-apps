@@ -94,8 +94,14 @@
     - [11.2.3. __rlc\_ul\_rx\_pdu__](#1123-rlc_ul_rx_pdu)
     - [11.2.4. __rlc\_ul\_sdu\_recv\_started__](#1124-rlc_ul_sdu_recv_started)
     - [11.2.5. __rlc\_ul\_sdu\_delivered__](#1125-rlc_ul_sdu_delivered)
-- [12. Periodic performance hook](#12-periodic-performance-hook)
-  - [12.1. report\_stats](#121-report_stats)
+- [12. Slice management](#12-slice-management)
+  - [12.1. __mac\_sched\_slice\_mgmt control hook__](#121-mac_sched_slice_mgmt-control-hook)
+- [13. Periodic performance hook](#13-periodic-performance-hook)
+  - [13.1. report\_stats](#131-report_stats)
+- [14. PDU Sessions](#14-pdu-sessions)
+  - [14.1. __cucp\_pdu\_session\_bearer\_setup__](#141-cucp_pdu_session_bearer_setup)
+  - [14.2. __cucp\_pdu\_session\_bearer\_modify__](#142-cucp_pdu_session_bearer_modify)
+  - [14.3. __cucp\_pdu\_session\_remove__](#143-cucp_pdu_session_remove)
 
 
 
@@ -247,7 +253,7 @@ Context info:
   
 ### 5.2.5. __mac_sched_ul_phr_indication__
   
-    Context "data" field points to an srsran::ul_phr_indication_message structure.
+    Context "data" field points to an srsran::cell_ph_report structure.
   
 ### 5.2.6. __mac_sched_dl_buffer_state_indication__
   
@@ -984,9 +990,47 @@ typedef enum {
         srs_meta_data2: latency_ns // from start of SDU reception to SDU delivery
     ```
 
-# 12. Periodic performance hook
+# 12. Slice management
 
-## 12.1. report_stats
+## 12.1. __mac_sched_slice_mgmt control hook__
+
+    This is called from the code in the srsRAN where the scheduler is deciding how to schedule the various slices.
+    
+    The hook has the current slice configuration passed in using a __jbpf_slice_allocation__ structure as shown below ..
+```c
+    // MAC slice control
+    #define JBPF_MAX_SLICES (16)
+    struct jbpf_slice_allocation {
+        uint8_t num_slices;
+        struct {
+            uint16_t pci;
+            uint32_t plmn_id;              // bcd format
+            struct {
+                uint8_t sst;
+                uint32_t sd;
+            } nssai;
+            uint8_t min_prb_policy_ratio;  // Sets the minimum percentage of PRBs to be allocated to the slice. Supported [0 - 100].
+            uint8_t max_prb_policy_ratio;  // Sets the maximum percentage of PRBs to be allocated to the slice. Supported [1 - 100].
+            uint8_t priority;              // Sets the slice priority. Values: [0 - 254].
+        } slices[JBPF_MAX_SLICES];
+    };
+```
+    
+    Context info:  
+    ```
+        sfn : current sfn
+        slot_index: current slot index
+        data: pointer to the __jbpf_slice_allocation__
+        data_end: pointer to end of the __jbpf_slice_allocation__
+    ```
+
+    It is a control hook.  The srsRAN slice configuration is updated if the codelet changes the contents of the __jbpf_slice_allocation__ structure.
+
+    Note that no slices can added or deleted, only the __min_prb_policy_ratio__, __max_prb_policy_ratio__ and __priority__ fields can be changed.
+
+# 13. Periodic performance hook
+
+## 13.1. report_stats
 
 This is a predefine hook built into the Jbpf framework.
 It is called invoked every second.
@@ -1016,3 +1060,33 @@ The hook has information passed in using a _jbpf_perf_hook_list__ as shown below
         data_end: pointer to end of the jbpf_perf_hook_list
         meas_period: Period of measurements in ms
     ```
+
+# 14. PDU Sessions
+
+These hoks are used to track PDU sessions, and can be used to correlate the slice __NSSAI__ and bearer __DRB__.
+
+All the hooks have information passed in using a __jbpf_pdu_session_ctx_info__ as shown below ..
+```c
+    struct jbpf_pdu_session_ctx_info {
+        uint16_t ctx_id;   /* Context id (could be implementation specific) */
+        uint64_t cu_cp_ue_index; 
+        uint16_t pdu_session_id; 
+        uint16_t drb_id; 
+        struct {
+            uint8_t sst;
+            uint32_t sd;
+        } nssai;
+    };
+```
+
+Context info:  
+```
+    data: pointer to the jbpf_pdu_session_ctx_info
+    data_end: pointer to end of the jbpf_pdu_session_ctx_info
+```
+
+## 14.1. __cucp_pdu_session_bearer_setup__
+  
+## 14.2. __cucp_pdu_session_bearer_modify__
+  
+## 14.3. __cucp_pdu_session_remove__

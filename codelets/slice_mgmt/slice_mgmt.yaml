@@ -1,0 +1,27 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
+codeletset_id: slice_mgmt
+
+codelet_descriptor:
+
+  - codelet_name: slice_mgmt
+    codelet_path: ${JBPF_CODELETS}/slice_mgmt/slice_mgmt.o
+    hook_name: mac_sched_slice_mgmt
+    priority: 1
+    in_io_channel:
+      - name: slice_request_map
+        # forward_destination: DestinationNone
+        serde:
+          file_path: ${JBPF_CODELETS}/slice_mgmt/slice_mgmt:slice_mgmt_req_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/slice_mgmt/slice_mgmt.pb
+            msg_name: slice_mgmt_req
+    out_io_channel:
+      - name: slice_indication_map
+        forward_destination: DestinationNone
+        serde:
+          file_path: ${JBPF_CODELETS}/slice_mgmt/slice_mgmt:slice_mgmt_ind_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/slice_mgmt/slice_mgmt.pb
+            msg_name: slice_mgmt_ind

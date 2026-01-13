@@ -10,6 +10,7 @@
 
 #include "../utils/misc_utils.h"
 #include "../utils/hashmap_utils.h"
+#include "../utils/stats_utils.h"
 
 
 #define SEC(NAME) __attribute__((section(NAME), used))
@@ -87,12 +88,12 @@ uint64_t jbpf_main(void* state)
     ///////////////////////////////////////////////// 
     // window info
     const jbpf_queue_info_t* queue_info = &pdcp_ctx.window_info;
-    PDCP_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_pkts, queue_info->num_pkts);
-    PDCP_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_bytes, queue_info->num_bytes);
+    STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_pkts, queue_info->num_pkts);
+    STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].pdu_window_bytes, queue_info->num_bytes);
 
     ///////////////////////////////////////////////// 
     // sdu_delivered_bytes
-    PDCP_TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_delivered_bytes, sdu_length);
+    TRAFFIC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_delivered_bytes, sdu_length);
 
     *not_empty_stats = 1;
 

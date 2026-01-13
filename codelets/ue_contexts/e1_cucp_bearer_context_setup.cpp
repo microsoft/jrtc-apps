@@ -53,9 +53,8 @@ uint64_t jbpf_main(void* state)
     out->timestamp = timestamp;
     out->cucp_ue_index = e1_ctx.cu_cp_ue_index;
     out->cucp_ue_e1ap_id = e1_ctx.gnb_cu_cp_ue_e1ap_id;
-        
+         
     int ret = jbpf_ringbuf_output(&output_map, (void *)out, sizeof(e1ap_cucp_bearer_ctx_setup));
-    
     if (ret < 0) {
 #ifdef DEBUG_PRINT
         jbpf_printf_debug("e1ap_cucp_bearer_ctx_setup: Failure: jbpf_ringbuf_output\n");

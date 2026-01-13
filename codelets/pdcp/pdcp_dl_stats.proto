@@ -5,14 +5,14 @@ syntax = "proto2";
 
 message t_dl_stats_item {
    required uint32 count = 1;
-   required uint32 total = 2;
+   required uint64 total = 2;
    required uint32 min = 3;
    required uint32 max = 4;
 }
 
 message t_dl_traffic_stats_item {
    required uint32 count = 1;
-   required uint32 total = 2;
+   required uint64 total = 2;
 }
 
 message t_dl_stats {

@@ -4,6 +4,7 @@
 #ifndef JRTC_PDCP_HELPERS_H
 #define JRTC_PDCP_HELPERS_H
 
+#include "../utils/stats_utils.h"
 
 #define MAX_NUM_UE_RB (256)
 
@@ -13,55 +14,20 @@
 
 
 
-#define PDCP_STATS_INIT(dest)   \
-    do {                           \
-        dest.count = 0;            \
-        dest.total = 0;            \
-        dest.min = UINT32_MAX;     \
-        dest.max = 0;              \
-    } while (0)
-
-#define PDCP_STATS_UPDATE(dest, src)   \
-    do {                                  \
-        dest.count++;                     \
-        if (src < dest.min) {             \
-            dest.min = src;               \
-        }                                 \
-        if (src > dest.max) {             \
-            dest.max = src;               \
-        }                                 \
-        dest.total += src;                \
-    } while (0)
-
-
-
-#define PDCP_TRAFFIC_STATS_INIT(dest)   \
-    do {                           \
-        dest.count = 0;            \
-        dest.total = 0;            \
-    } while (0)
-
-#define PDCP_TRAFFIC_STATS_UPDATE(dest, v)   \
-    do {                           \
-        dest.count++;            \
-        dest.total += v;            \
-    } while (0)
-
-
 #define PDCP_DL_STATS_INIT(dest, __cu_ue_index, __is_srb, __rb_id, __rlc_mode)  \
     do {                                                                        \
         dest.cu_ue_index = __cu_ue_index;                                       \
         dest.is_srb = __is_srb;                                                 \
         dest.rb_id = __rb_id;                                                   \
         dest.rlc_mode = PDCP_RLCMODE_2_JBPF_RLCMODE(__rlc_mode);                \
-        PDCP_TRAFFIC_STATS_INIT(dest.sdu_new_bytes);                            \
+        TRAFFIC_STATS_INIT(dest.sdu_new_bytes);                            \
         dest.sdu_discarded = 0;                                                 \
-        PDCP_TRAFFIC_STATS_INIT(dest.data_pdu_tx_bytes);                        \
-        PDCP_TRAFFIC_STATS_INIT(dest.data_pdu_retx_bytes);                      \
-        PDCP_TRAFFIC_STATS_INIT(dest.control_pdu_tx_bytes);                     \
-        PDCP_STATS_INIT(dest.pdu_window_pkts);                                  \
-        PDCP_STATS_INIT(dest.pdu_window_bytes);                                 \
-        PDCP_STATS_INIT(dest.sdu_tx_latency);                                   \
+        TRAFFIC_STATS_INIT(dest.data_pdu_tx_bytes);                        \
+        TRAFFIC_STATS_INIT(dest.data_pdu_retx_bytes);                      \
+        TRAFFIC_STATS_INIT(dest.control_pdu_tx_bytes);                     \
+        STATS_INIT(dest.pdu_window_pkts);                                  \
+        STATS_INIT(dest.pdu_window_bytes);                                 \
+        STATS_INIT(dest.sdu_tx_latency);                                   \
     } while (0) 
 
 
@@ -72,11 +38,11 @@
         dest.is_srb = __is_srb;                                         \
         dest.rb_id = __rb_id;                                           \
         dest.rlc_mode = PDCP_RLCMODE_2_JBPF_RLCMODE(__rlc_mode);        \
-        PDCP_TRAFFIC_STATS_INIT(dest.sdu_delivered_bytes);              \
-        PDCP_TRAFFIC_STATS_INIT(dest.rx_data_pdu_bytes);                \
-        PDCP_TRAFFIC_STATS_INIT(dest.rx_control_pdu_bytes);             \
-        PDCP_STATS_INIT(dest.pdu_window_pkts);                          \
-        PDCP_STATS_INIT(dest.pdu_window_bytes);                         \
+        TRAFFIC_STATS_INIT(dest.sdu_delivered_bytes);              \
+        TRAFFIC_STATS_INIT(dest.rx_data_pdu_bytes);                \
+        TRAFFIC_STATS_INIT(dest.rx_control_pdu_bytes);             \
+        STATS_INIT(dest.pdu_window_pkts);                          \
+        STATS_INIT(dest.pdu_window_bytes);                         \
     } while (0)
 
 

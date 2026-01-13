@@ -1,7 +1,13 @@
 #!/bin/bash
 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
 BASE_IMAGE_TAG=latest
-IMAGE_TAG=latest
+
+CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+source $(dirname $(dirname "$CURRENT_DIR"))/set_vars.sh
+
 
 Usage()
 {
@@ -9,7 +15,7 @@ Usage()
    echo "Build srsRan=Jbpf base image"
    echo "options:"
    echo "[-b]    Optional base image tag.  Default='latest'"
-   echo "[-s]    Optional srsRan image tag.  Default='latest'"
+   echo "[-s]    Optional srsRan image tag.  Default='$SRSRAN_IMAGE_TAG'"
    echo
 }
 
@@ -19,7 +25,7 @@ while getopts "b:s:c" option; do
 		b) # Set image tag
 			BASE_IMAGE_TAG="$OPTARG";;
 		s) # Set image tag
-			IMAGE_TAG="$OPTARG";;
+			SRSRAN_IMAGE_TAG="$OPTARG";;
 		c) # Set image tag
 			CACHE_FLAG="--no-cache";;
 		\?) # Invalid option
@@ -30,7 +36,7 @@ while getopts "b:s:c" option; do
 done
 
 echo BASE_IMAGE_TAG $BASE_IMAGE_TAG
-echo IMAGE_TAG $IMAGE_TAG
+echo SRSRAN_IMAGE_TAG $SRSRAN_IMAGE_TAG
 
 # First build the jbpf_protobuf image
 
@@ -50,9 +56,9 @@ popd > /dev/null
 
 docker build $CACHE_FLAG \
   	--build-arg BASE_IMAGE_TAG=${BASE_IMAGE_TAG} \
-    --build-arg SRS_JBPF_IMAGE_TAG=${IMAGE_TAG} \
+    --build-arg SRS_JBPF_IMAGE_TAG=${SRSRAN_IMAGE_TAG} \
     --build-arg JBPF_PROTOBUF_BUILDER_IMAGE=jbpf_protobuf_cli \
     --build-arg JBPF_PROTOBUF_BUILDER_IMAGE_TAG=latest \
-    -t ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:${IMAGE_TAG} -f SRS-jbpf-sdk.Dockerfile .
+    -t ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:${SRSRAN_IMAGE_TAG} -f SRS-jbpf-sdk.Dockerfile .
 
 exit 0

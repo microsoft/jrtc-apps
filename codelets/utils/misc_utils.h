@@ -4,6 +4,7 @@
 #ifndef MISC_UTILS_H
 #define MISC_UTILS_H
 
+#define JBPF_CTRL_CODELET_SUCCESS (1)
 #define JBPF_CODELET_SUCCESS (0)
 #define JBPF_CODELET_FAILURE (-1)
 

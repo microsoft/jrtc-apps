@@ -1,0 +1,4 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+slice_mgmt_set_req.slice         max_count:16
+slice_mgmt_ind.slice             max_count:16

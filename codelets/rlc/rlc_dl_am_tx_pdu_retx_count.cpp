@@ -10,6 +10,7 @@
 
 #include "../utils/misc_utils.h"
 #include "../utils/hashmap_utils.h"
+#include "../utils/stats_utils.h"
 
 
 #define SEC(NAME) __attribute__((section(NAME), used))
@@ -100,8 +101,8 @@ uint64_t jbpf_main(void* state)
         queue_info = &rlc_ctx.u.tm_tx.sdu_queue_info;
     }  
     if (queue_info) {
-        RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_queue_pkts, queue_info->num_pkts);
-        RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_queue_bytes, queue_info->num_bytes);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_queue_pkts, queue_info->num_pkts);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].sdu_queue_bytes, queue_info->num_bytes);
     }
 
     /////////////////////////////////////////////
@@ -110,14 +111,14 @@ uint64_t jbpf_main(void* state)
 
         /////////////////////////////////////////////
         // pdu_retx_count
-        RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_retx_count, retx_count);
+        STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_retx_count, retx_count);
 
         /////////////////////////////////////////////
         // update pdu_window
         const jbpf_queue_info_t* queue_info = &rlc_ctx.u.am_tx.window_info;
         if (queue_info->used) {
-            RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_pkts, queue_info->num_pkts);
-            RLC_STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_bytes, queue_info->num_bytes);
+            STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_pkts, queue_info->num_pkts);
+            STATS_UPDATE(out->stats[ind % MAX_NUM_UE_RB].am.pdu_window_bytes, queue_info->num_bytes);
         }
     }	
 

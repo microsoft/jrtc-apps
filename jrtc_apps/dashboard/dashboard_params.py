@@ -9,7 +9,7 @@ la_stats_period_secs = 10
 # Config for JSON port.
 # This is used to receive data from the Core
 json_udp_enabled = True
-json_udp_port = 20790
+json_udp_port = 30502
 
 # Enable/Disbale processing of individual part of the stack
 include_ue_contexts = True

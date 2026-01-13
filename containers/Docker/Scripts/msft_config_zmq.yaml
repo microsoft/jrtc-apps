@@ -1,0 +1,87 @@
+# The default SRS config for the testbed
+
+cu_cp:
+  amf:
+    addr: 192.168.101.14
+    bind_addr: 0.0.0.0
+    supported_tracking_areas:
+      - tac: 1
+        plmn_list:
+          - plmn: "00101"
+            tai_slice_support_list:
+              - sst: 1
+                sd: 162
+              - sst: 1
+                sd: 163
+              - sst: 1
+                sd: 164
+              - sst: 1
+                sd: 165
+  inactivity_timer: 7200            # Sets the UE/PDU Session/DRB inactivity timer to 7200 seconds. Supported: [1 - 7200].
+  security:
+    nea_pref_list: nea0,nea2,nea1,nea3
+    nia_pref_list: nia2,nia1
+
+cell_cfg:
+  dl_arfcn: 368500                  # ARFCN of the downlink carrier (center frequency).
+  band: 3                           # The NR band.
+  channel_bandwidth_MHz: 10         # Bandwith in MHz. Number of PRBs will be automatically derived.
+  common_scs: 15                    # Subcarrier spacing in kHz used for data.
+  plmn: "00101"                     # PLMN broadcasted by the gNB.
+  tac: 1                            # Tracking area code (needs to match the core configuration).
+  pdcch:
+    common:
+      ss0_index: 0                  # Set search space zero index to match srsUE capabilities
+      coreset0_index: 6            # Set search CORESET Zero index to match srsUE capabilities
+    dedicated:
+      ss2_type: common              # Search Space type, has to be set to common
+      dci_format_0_1_and_1_1: false # Set correct DCI format (fallback)
+  prach:
+    prach_config_index: 1           # Sets PRACH config to match what is expected by srsUE
+    total_nof_ra_preambles: 64      # Sets number of available PRACH preambles
+    nof_ssb_per_ro: 1               # Sets the number of SSBs per RACH occasion.
+    nof_cb_preambles_per_ssb: 64    # Sets the number of contention based preambles per SSB.    
+  pdsch:
+    mcs_table: qam64                # Sets PDSCH MCS to 64 QAM
+  pusch:
+    mcs_table: qam64                # Sets PUSCH MCS to 64 QAM
+  tdd_ul_dl_cfg:
+    dl_ul_tx_period: 10
+    nof_dl_slots: 7
+    nof_dl_symbols: 6
+    nof_ul_slots: 2
+    nof_ul_symbols: 4
+  slicing:   # Use default slice allocations
+    -   # slice=internet
+      sst: 1
+      sd: 162
+    -  # slice=internet2
+      sst: 1
+      sd: 163
+    -  # slice=internet3
+      sst: 1
+      sd: 164
+    -  # slice=default
+      sst: 1
+      sd: 165
+
+cells:
+  - pci: 1
+    dl_arfcn: 368500
+
+ru_sdr:
+  device_driver: zmq
+  device_args: tx_port=tcp://0.0.0.0:$ZMQ_TX_PORT,rx_port=tcp://$ZMQ_RX_ADDR:$ZMQ_RX_PORT,base_srate=11.52e6
+  srate: 11.52
+  tx_gain: 75
+  rx_gain: 75
+
+log:
+  filename: ./gnb.log
+  ofh_level: warning
+  all_level: warning
+  gtpu_level: warning
+
+
+metrics:
+  autostart_stdout_metrics: true

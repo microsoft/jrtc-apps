@@ -1,0 +1,4 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+harq_stats.stats    max_count:32
+t_harq_stats.perHarqTypeStats  max_count:3, fixed_count:true

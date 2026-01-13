@@ -74,7 +74,6 @@ spec:
         configMap:
           name: srs-gnb-cm-{{ $ran_name }}
 
-
       {{- if (or (or $.Values.vlan_isolation.enabled (eq (int $.Values.jbpf.cfg.jbpf_enable_ipc) 1))  (and (not $.Values.debug_mode.enabled) $.Values.das.enabled) ) }}
       initContainers:
       
@@ -115,6 +114,8 @@ spec:
           done;"
       {{- end }}
 
+      {{- if not $.Values.zmq.enabled }}
+
       {{- if $.Values.vlan_isolation.enabled }}
       {{range $idx_c, $cell := $values.cells}}
       # Init container to set VLANs for RUs using a custom API
@@ -132,8 +133,11 @@ spec:
           echo 'Waiting for VLANs to be set...' &&
           curl -s --show-error -f -X PUT "http://{{ $.Values.vlan_isolation.url }}/tor_switch/assign_servers_to_ru?servers=$(MY_NODE_NAME)&ru={{ $cell.ruNAME }}" &&
           echo 'All VLANs set, continuing'
-      {{end}}
-      {{- end }}
+      {{end}}  # range
+      
+      {{- end }} # vlan_isolation.enabled
+      
+      {{- end }}  # zmq.enabled
 
       {{- end }}
 
@@ -146,9 +150,31 @@ spec:
         args: [ "while true; do sleep 30; done;" ]
       {{- end }}
 
+      {{- if eq (int $.Values.jbpf.cfg.jbpf_enable_ipc) 1 }}
+      {{- if $.Values.udp_forwarder.enabled }}
+      - name: udpforwarder
+        image: {{ $.Values.image.srs_jbpf }}
+        imagePullPolicy: {{ $.Values.image.pullPolicy }}
+        env:
+          - name: LISTEN_IP
+            value: "{{ $.Values.sriov.cucp_ip }}"
+          - name: LISTEN_PORT
+            value: "{{ add $.Values.udp_forwarder.port $ran_cnt }}"
+          - name: FORWARD_IP
+            value: "jrtc-udp-input.{{ $.Release.Namespace }}.svc.cluster.local"
+          - name: FORWARD_PORT
+            value: "{{ $.Values.udp_forwarder.port }}"
+        command: ["/udp_forwarder/udp_forwarder.sh"]
+      {{- end }}
+      {{- end }}
 
       - name: gnb
+        {{- if  $.Values.zmq.enabled }}
+        image: "{{ $.Values.image.srs_jbpf_zmq }}"
+        {{- else }}
         image: "{{ $.Values.image.srs_jbpf }}"
+        {{- end }}
+
         imagePullPolicy: "{{ $.Values.image.pullPolicy }}"
         volumeMounts:
         - name: dshm
@@ -171,13 +197,25 @@ spec:
         {{- if  $.Values.debug_mode.enabled }}
         args: [ "sleep 99999999d" ]
         {{- else }}
+        {{- if  $.Values.zmq.enabled }}            
+        args: [ "/opt/Scripts/run_zmq.sh" ]
+        {{- else }}
         args: [ "/opt/Scripts/run.sh" ]
+        {{- end }}
         {{- end }}
         env:
           - name: DEBUG_MODE
             value: "{{ $.Values.debug_mode.enabled }}"
           - name: JBPF_CODELETS
             value: "/codelets"
+        {{- if  $.Values.zmq.enabled }}            
+          - name: ZMQ_TX_PORT
+            value: "{{ $.Values.zmq.ran.tx_port }}"
+          - name: ZMQ_RX_ADDR
+            value: "srs-grc-{{ $ran_name }}-zmq.ran.svc.cluster.local"
+          - name: ZMQ_RX_PORT
+            value: "{{ $.Values.zmq.ran.rx_port }}"
+        {{- end }}
         securityContext:
           privileged: true
           capabilities:
@@ -187,8 +225,7 @@ spec:
             - SYS_NICE
         tty: true
         stdin: true
-
-
+  
         resources:
           limits:
             cpu: {{ $.Values.resources.gnb.limits.cpu }}
@@ -244,7 +281,7 @@ spec:
 
 ---
 
-# DNS name: janus-gnb-#-io-in.{{ $.Release.Namespace }}.svc.cluster.local
+# DNS name: srs-gnb-{{ $ran_name }}-io-in.{{ $.Release.Namespace }}.svc.cluster.local
 kind: Service
 apiVersion: v1
 metadata:
@@ -266,8 +303,7 @@ spec:
 
 ---
 
-
-# DNS name: janus-gnb-#-agent.{{ $.Release.Namespace }}.svc.cluster.local
+# DNS name: srs-gnb-{{ $ran_name }}-proxy.{{ $.Release.Namespace }}.svc.cluster.local
 kind: Service
 apiVersion: v1
 metadata:
@@ -286,6 +322,57 @@ spec:
       targetPort: {{ add $.Values.jbpf.port $ran_cnt }}
       nodePort: {{ add $.Values.jbpf.port $ran_cnt }}
 
+---
+
+# DNS name:srs-gnb-{{ $ran_name }}-udpforwarder.{{ $.Release.Namespace }}.svc.cluster.local
+kind: Service
+apiVersion: v1
+metadata:
+  name: srs-gnb-{{ $ran_name }}-udpforwarder
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: srs-gnb-{{ $ran_name }}
+spec:
+  selector:
+    app: srs-gnb-{{ $ran_name }}
+  type: NodePort
+  ports:
+    - name: udpforwarder-port
+      protocol: UDP
+      port: {{ add $.Values.udp_forwarder.port $ran_cnt }}
+      targetPort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
+      nodePort: {{ add $.Values.udp_forwarder.port $ran_cnt }}
+
+---
+
+{{- if  $.Values.zmq.enabled }}
+
+# ZMQ service for gNB – used by UE to connect (tx/rx)
+# DNS: srs-gnb-{{ $ran_name }}-zmq.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: srs-gnb-{{ $ran_name }}-zmq
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: srs-gnb-{{ $ran_name }}
+spec:
+  selector:
+    app: srs-gnb-{{ $ran_name }}
+  type: ClusterIP
+  ports:
+    - name: gnb-zmq-rx
+      protocol: TCP
+      port: {{ add $.Values.zmq.ran.rx_port $ran_cnt }}
+      targetPort: {{ add $.Values.zmq.ran.rx_port $ran_cnt }}
+    - name: gnb-zmq-tx
+      protocol: TCP
+      port: {{ add $.Values.zmq.ran.tx_port $ran_cnt }}
+      targetPort: {{ add $.Values.zmq.ran.tx_port $ran_cnt }}
+
+---
+
+{{- end }}
 
 {{ $ran_cnt = add1 $ran_cnt }}
 

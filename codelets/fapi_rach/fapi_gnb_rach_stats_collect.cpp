@@ -5,7 +5,7 @@
 
 #include "jbpf_srsran_contexts.h"
 
-#include "srsran/fapi/messages.h"
+#include "srsran/fapi/messages/rach_indication.h"
 
 #include "fapi_gnb_rach_stats.pb.h"
 
