@@ -32,6 +32,12 @@ cd utils
 For more info on the message decoder, see [here](https://github.com/microsoft/jbpf-protobuf/blob/main/examples/first_example_standalone/README.md).
 
 `Terminal-3`
+Run the *jbpf* reverse proxy (see [here](https://github.com/microsoft/jbpf/tree/main/examples/reverse_proxy) for more info):
+```sh
+sudo -E $SRSRAN_DIR/out/bin/srsran_reverse_proxy --host-port 30450 --address "/tmp/jbpf/jbpf_lcm_ipc"
+```
+
+`Terminal-4`
 Finally, in the last window, load the schemas and codelets (if you run your srsRAN with sudo, you'll need to run the above command with sudo):
 ```sh
 cd utils
