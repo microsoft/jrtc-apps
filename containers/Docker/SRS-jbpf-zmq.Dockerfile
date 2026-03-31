@@ -1,4 +1,5 @@
 ARG SRS_JBPF_IMAGE_TAG=latest
+ARG MARCH=x86-64-v3
 
 # =============================
 # Stage 1: Build libzmq + czmq
@@ -34,6 +35,8 @@ RUN git clone --depth 1 https://github.com/zeromq/czmq.git && \
 # =============================
 FROM ghcr.io/microsoft/jrtc-apps/srs-jbpf:${SRS_JBPF_IMAGE_TAG}
 
+ARG MARCH
+
 # Copy only installed libs/binaries from builder
 COPY --from=builder /usr/local /usr/local
 
@@ -49,7 +52,7 @@ RUN ldconfig -p | grep zmq || true
 
 WORKDIR /src/build
 RUN rm -rf * /out
-RUN cmake .. -DENABLE_ZEROMQ=ON -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF -DCMAKE_C_FLAGS="-Wno-error=unused-variable"
+RUN cmake .. -DENABLE_ZEROMQ=ON -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF -DMARCH=${MARCH} -DCMAKE_C_FLAGS="-Wno-error=unused-variable"
 RUN make -j VERBOSE=1
 RUN make install
 

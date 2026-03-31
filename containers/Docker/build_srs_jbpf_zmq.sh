@@ -6,24 +6,27 @@
 CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 source $(dirname $(dirname "$CURRENT_DIR"))/set_vars.sh
 
+MARCH=x86-64-v3
 
 Usage()
 {
    # Display Help
-   echo "Build srsRan=Jbpf base image"
+   echo "Build srsRan=Jbpf zmq image"
    echo "options:"
-   echo "[-b]    Optional base image tag.  Default='latest'"
    echo "[-s]    Optional srsRan image tag.  Default='$SRSRAN_IMAGE_TAG'"
+   echo "[-m]    Optional CPU march target.  Default='x86-64-v3' (AVX2)"
    echo
 }
 
 # Get the options
 #while getopts "b:s:c" option; do
-while getopts "s:c" option; do
+while getopts "s:m:c" option; do
 	case $option in
 
 		s) # Set image tag
 			SRSRAN_IMAGE_TAG="$OPTARG";;
+		m) # Set CPU march target
+			MARCH="$OPTARG";;
 		c) # Set image tag
 			CACHE_FLAG="--no-cache";;
 		\?) # Invalid option
@@ -35,34 +38,12 @@ done
 
 #echo BASE_IMAGE_TAG $BASE_IMAGE_TAG
 echo SRSRAN_IMAGE_TAG $SRSRAN_IMAGE_TAG
+echo MARCH $MARCH
 
 docker build $CACHE_FLAG \
     --build-arg SRS_JBPF_IMAGE_TAG=${SRSRAN_IMAGE_TAG} \
+    --build-arg MARCH=${MARCH} \
     -t ghcr.io/microsoft/jrtc-apps/srs-jbpf-zmq:${SRSRAN_IMAGE_TAG} -f SRS-jbpf-zmq.Dockerfile .
 
-
-
-# First build the jbpf_protobuf image
-
-# pushd . > /dev/null
-# cd ../../jbpf_protobuf/
-
-# # To build for a particular OS, run:
-# OS=azurelinux
-# docker build -t jbpfp-$OS:latest -f deploy/$OS.Dockerfile .
-
-# # And to create a jbpf_protobuf_cli image from that container, run:
-# docker build --build-arg builder_image=jbpfp-$OS --build-arg builder_image_tag=latest -t jbpf_protobuf_cli:latest - < deploy/jbpf_protobuf_cli.Dockerfile
-
-# popd > /dev/null
-
-
-
-# docker build $CACHE_FLAG \
-#   	--build-arg BASE_IMAGE_TAG=${BASE_IMAGE_TAG} \
-#     --build-arg SRS_JBPF_IMAGE_TAG=${SRSRAN_IMAGE_TAG} \
-#     --build-arg JBPF_PROTOBUF_BUILDER_IMAGE=jbpf_protobuf_cli \
-#     --build-arg JBPF_PROTOBUF_BUILDER_IMAGE_TAG=latest \
-#     -t ghcr.io/microsoft/jrtc-apps/srs-jbpf-sdk:${SRSRAN_IMAGE_TAG} -f SRS-jbpf-sdk.Dockerfile .
 
 exit 0

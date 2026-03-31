@@ -3,11 +3,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-BASE_IMAGE_TAG=latest
 CACHE_FLAG=
 
 CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 source $(dirname $(dirname "$CURRENT_DIR"))/set_vars.sh
+
+BASE_IMAGE_TAG=$SRSRAN_IMAGE_TAG
 
 Usage()
 {

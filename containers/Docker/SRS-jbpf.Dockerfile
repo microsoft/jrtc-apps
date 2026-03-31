@@ -5,16 +5,19 @@
 
 ARG LIB=dpdk
 ARG LIB_VERSION=23.11
+ARG MARCH=x86-64-v3
 
 ARG BASE_IMAGE_TAG=latest
 FROM ghcr.io/microsoft/jrtc-apps/base/srs:${BASE_IMAGE_TAG}
+
+ARG MARCH
 
 LABEL org.opencontainers.image.source="https://github.com/microsoft/jrtc-apps"
 LABEL org.opencontainers.image.authors="Microsoft Corporation"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.description="SRSRAN with JBPF support"
 
-ADD srsRAN_Project /src 
+ADD srsRAN_Project /src
 
 ENV PKG_CONFIG_PATH=/opt/dpdk-23.11/build/meson-private:/usr/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig:$PKG_CONFIG_PATH
 
@@ -26,7 +29,7 @@ RUN mkdir build
 WORKDIR /src/build
 # Temporary fix for failing jbpf tests in RELEASE mode. To be removed when jbpf tests are fixed.
 #RUN cmake .. -DENABLE_DPDK=True -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF
-RUN cmake .. -DENABLE_DPDK=True -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF -DCMAKE_C_FLAGS="-Wno-error=unused-variable"
+RUN cmake .. -DENABLE_DPDK=True -DENABLE_JBPF=ON -DINITIALIZE_SUBMODULES=OFF -DMARCH=${MARCH} -DCMAKE_C_FLAGS="-Wno-error=unused-variable"
 RUN make -j VERBOSE=1
 RUN make install
 

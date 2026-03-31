@@ -5,6 +5,8 @@
 
 FROM mcr.microsoft.com/azurelinux/base/core:3.0
 
+ARG DPDK_MACHINE=default
+
 COPY Scripts/mariner-extras.repo /etc/yum.repos.d
 RUN tdnf makecache
 
@@ -50,7 +52,7 @@ WORKDIR /opt
 RUN wget https://fast.dpdk.org/rel/dpdk-23.11.tar.xz
 RUN tar xvf dpdk-23.11.tar.xz dpdk-23.11
 WORKDIR /opt/dpdk-23.11
-RUN meson setup build
+RUN meson setup build -Dmachine=${DPDK_MACHINE}
 WORKDIR /opt/dpdk-23.11/build
 RUN ninja
 RUN meson install
