@@ -3,14 +3,17 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-BASE_IMAGE_TAG=latest
+CURRENT_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+source $(dirname $(dirname "$CURRENT_DIR"))/set_vars.sh
+
+BASE_IMAGE_TAG=$SRSRAN_IMAGE_TAG
 
 Usage()
 {
    # Display Help
    echo "Build srsRan base image"
    echo "options:"
-   echo "[-b]    Optional base image tag.  Default='latest'"
+   echo "[-b]    Optional base image tag.  Default='$SRSRAN_IMAGE_TAG'"
    echo
 }
 

@@ -1,6 +1,9 @@
 ARG SRSRAN_IMAGE_TAG=latest
+ARG GCC_ARCH=x86-64-v3
 
 FROM ghcr.io/microsoft/jrtc-apps/srs-ue-base:${SRSRAN_IMAGE_TAG}
+
+ARG GCC_ARCH
 
 LABEL org.opencontainers.image.source="https://github.com/microsoft/jrtc-apps"
 LABEL org.opencontainers.image.authors="Microsoft Corporation"
@@ -11,7 +14,7 @@ LABEL org.opencontainers.image.description="SDK for SRSRAN with JBPF, built in Z
 WORKDIR /
 ADD srsRAN_4G /srsRAN_4G
 WORKDIR /srsRAN_4G/build
-RUN cmake ../ -DENABLE_RF_PLUGINS=OFF -DCMAKE_C_COMPILER=/usr/local/gcc-11/bin/gcc -DCMAKE_CXX_COMPILER=/usr/local/gcc-11/bin/g++ -DBOOST_ROOT=/usr/local
+RUN cmake ../ -DENABLE_RF_PLUGINS=OFF -DGCC_ARCH=${GCC_ARCH} -DCMAKE_C_COMPILER=/usr/local/gcc-11/bin/gcc -DCMAKE_CXX_COMPILER=/usr/local/gcc-11/bin/g++ -DBOOST_ROOT=/usr/local
 RUN make -j`nproc`
 RUN make install
 
