@@ -7,7 +7,7 @@ RUN tdnf install -y \
     tdnf clean all
     
 # downgrade gcc from 13 to 11
-RUN tdnf install -y gcc gcc-c++ make wget tar bzip2 gmp-devel mpfr-devel libmpc-devel
+RUN tdnf install -y gcc gcc-c++ make wget tar bzip2 gmp-devel mpfr-devel libmpc-devel file glibc-devel
 WORKDIR /tmp
 RUN wget https://ftp.gnu.org/gnu/gcc/gcc-11.4.0/gcc-11.4.0.tar.xz
 RUN tar -xf gcc-11.4.0.tar.xz
